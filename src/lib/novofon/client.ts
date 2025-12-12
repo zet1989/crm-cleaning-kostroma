@@ -139,12 +139,15 @@ export class NovofonClient {
    * @param recordUrl URL записи звонка
    */
   async downloadRecord(recordUrl: string): Promise<Buffer> {
-    const response = await axios.get(recordUrl, {
-      responseType: 'arraybuffer',
-      timeout: 30000,
+    return new Promise((resolve, reject) => {
+      https.get(recordUrl, { timeout: 30000 }, (res) => {
+        const chunks: Buffer[] = [];
+        
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+        res.on('error', reject);
+      }).on('error', reject);
     });
-    
-    return Buffer.from(response.data);
   }
 }
 
