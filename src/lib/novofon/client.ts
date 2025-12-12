@@ -23,11 +23,13 @@ export interface NovofonCallsResponse {
 
 export class NovofonClient {
   private accessToken: string;
+  private appId: string;
   private secret: string;
   private baseUrl = 'https://dataapi-jsonrpc.novofon.ru/v2.0';
 
-  constructor(accessToken: string, secret?: string) {
+  constructor(accessToken: string, appId?: string, secret?: string) {
     this.accessToken = accessToken;
+    this.appId = appId || '';
     this.secret = secret || '';
   }
 
