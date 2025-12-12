@@ -136,19 +136,26 @@ async function processWithAI(
     const currentDate = now.toISOString().split('T')[0] // YYYY-MM-DD
     const currentTime = now.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
     
-    // Используем кастомный промпт или дефолтный
-    const prompt = systemPrompt || `Ты - ассистент CRM системы клининговой компании. 
+    const systemMessage = systemPrompt || `Ты - ассистент CRM системы клининговой компании.
 Твоя задача - извлечь из текста заявки структурированные данные.
 
-ВАЖНО: Текущая дата и время: \${currentDate} \${currentTime}
+ВАЖНО: Текущая дата и время: ${currentDate} ${currentTime}
 
 Извлеки следующие поля:
-- client_name (имя клиента, например: "Вася", "Иван Петров")
-        messages: [
-          {
-            role: 'system',
-            content: finalPrompt
-          },tent-Type': 'application/json',
+- client_name (имя клиента)
+- client_phone (телефон в формате +7XXXXXXXXXX)
+- address (полный адрес)
+- scheduled_at (дата и время в ISO формате)
+- price (стоимость в рублях, только число)
+- cleaning_type (тип уборки)
+
+Верни ТОЛЬКО JSON без комментариев. Если поле не найдено, не включай его в ответ.`
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
         'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
       },
       body: JSON.stringify({
@@ -156,25 +163,7 @@ async function processWithAI(
         messages: [
           {
             role: 'system',
-            content: `Ты - ассистент CRM системы клининговой компании. 
-Твоя задача - извлечь из текста заявки структурированные данные.
-
-ВАЖНО: Текущая дата и время: ${currentDate} ${currentTime}
-
-Извлеки следующие поля:
-- client_name (имя клиента, например: "Вася", "Иван Петров")
-- client_phone (телефон в формате +7XXXXXXXXXX, убери все пробелы и скобки)
-- address (полный адрес, включая улицу и номер дома/квартиры. Примеры: "Лунина, 45", "ул. Ленина, д. 10, кв. 5")
-- scheduled_at (дата и время в ISO формате UTC: "YYYY-MM-DDTHH:MM:SS"
-  * Если указано "сегодня" - используй ${currentDate}
-  * Если указано "завтра" - добавь 1 день к ${currentDate}
-  * Если указано "послезавтра" - добавь 2 дня к ${currentDate}
-  * Если указано время, добавь его (например "14:00" → "14:00:00")
-  * Если время НЕ указано, используй "09:00:00" (начало рабочего дня)
-- price (стоимость в рублях, только число, например: 5000)
-- cleaning_type (тип уборки: стандартная, генеральная, после ремонта, офис, окна, deep cleaning)
-
-Верни ТОЛЬКО JSON без комментариев. Если поле не найдено, не включай его в ответ.`
+            content: systemMessage
           },
           {
             role: 'user',
