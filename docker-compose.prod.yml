@@ -53,6 +53,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+        OPENAI_API_KEY: ${OPENAI_API_KEY}
+        NOVOFON_ACCESS_TOKEN: ${NOVOFON_ACCESS_TOKEN}
+        NOVOFON_APP_ID: ${NOVOFON_APP_ID}
+        NOVOFON_SECRET: ${NOVOFON_SECRET}
     container_name: crm-next-app
     restart: always
     ports:

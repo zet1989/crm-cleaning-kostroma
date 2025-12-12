@@ -14,12 +14,27 @@ RUN npm ci --only=production
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Объявляем build-time аргументы
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG SUPABASE_SERVICE_ROLE_KEY
+ARG OPENAI_API_KEY
+ARG NOVOFON_ACCESS_TOKEN
+ARG NOVOFON_APP_ID
+ARG NOVOFON_SECRET
+
+# Устанавливаем переменные окружения для build-time
+ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+ENV SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+ENV OPENAI_API_KEY=${OPENAI_API_KEY}
+ENV NOVOFON_ACCESS_TOKEN=${NOVOFON_ACCESS_TOKEN}
+ENV NOVOFON_APP_ID=${NOVOFON_APP_ID}
+ENV NOVOFON_SECRET=${NOVOFON_SECRET}
+
 # Копируем зависимости из первого stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Копируем .env для build time (если существует)
-COPY .env* ./
 
 # Устанавливаем все зависимости (включая dev)
 RUN npm ci

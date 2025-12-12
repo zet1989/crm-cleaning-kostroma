@@ -1,17 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-// Используем Service Role Key для админских операций
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
+// Функция для создания админского клиента
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     }
-  }
-)
+  )
+}
 
 export async function DELETE(
   request: NextRequest,
@@ -19,6 +21,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+    const supabaseAdmin = getSupabaseAdmin()
 
     // Удаляем пользователя через Admin API
     const { error } = await supabaseAdmin.auth.admin.deleteUser(id)
