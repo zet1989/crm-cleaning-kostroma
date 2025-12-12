@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       // Проверяем, есть ли уже сделка с этим номером
       const { data: existingDeal } = await supabase
         .from('deals')
-        .select('id, client_name, column_id, columns(name)')
+        .select('id, client_name, column_id, notes, columns(name)')
         .eq('client_phone', clientPhone)
         .order('created_at', { ascending: false })
         .limit(1)
