@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестовая форма заявки на уборку</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .required {
+            color: #e74c3c;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Заявка на уборку</h1>
+        <p class="subtitle">Тестовая форма для CRM системы</p>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="orderForm">
+            <div class="form-group">
+                <label for="name">Ваше имя <span class="required">*</span></label>
+                <input type="text" id="name" name="name" placeholder="Иван Иванов" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Телефон <span class="required">*</span></label>
+                <input type="tel" id="phone" name="phone" placeholder="+7 (999) 123-45-67" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="ivan@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="address">Адрес</label>
+                <input type="text" id="address" name="address" placeholder="ул. Ленина 123, кв. 45">
+            </div>
+
+            <div class="form-group">
+                <label for="cleaning_type">Тип уборки</label>
+                <select id="cleaning_type" name="cleaning_type">
+                    <option value="">Выберите тип</option>
+                    <option value="standard">Стандартная уборка</option>
+                    <option value="deep">Генеральная уборка</option>
+                    <option value="after_repair">После ремонта</option>
+                    <option value="windows">Мытьё окон</option>
+                    <option value="office">Офис</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="scheduled_date">Желаемая дата</label>
+                <input type="date" id="scheduled_date" name="scheduled_date">
+            </div>
+
+            <div class="form-group">
+                <label for="scheduled_time">Желаемое время</label>
+                <input type="time" id="scheduled_time" name="scheduled_time">
+            </div>
+
+            <div class="form-group">
+                <label for="message">Комментарий</label>
+                <textarea id="message" name="message" placeholder="Расскажите подробнее о задаче..."></textarea>
+            </div>
+
+            <button type="submit">Отправить заявку</button>
+            <div class="loading" id="loading">Отправка...</div>
+        </form>
+    </div>
+
+    <script>
+        const form = document.getElementById('orderForm');
+        const alert = document.getElementById('alert');
+        const loading = document.getElementById('loading');
+
+        // Установить минимальную дату (сегодня)
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('scheduled_date').setAttribute('min', today);
+
+        // Обработчик отправки формы
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Получаем данные формы
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            // Показываем загрузку
+            loading.classList.add('show');
+            alert.classList.remove('show');
+
+            try {
+                // ВАЖНО: Измените URL на ваш реальный адрес CRM
+                const response = await fetch('http://localhost:3000/api/webhooks/site', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // Если установлен WEBHOOK_API_KEY в .env, раскомментируйте:
+                        // 'X-API-Key': 'your_secret_key_here'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Успех
+                    showAlert('success', result.message || 'Заявка успешно отправлена!');
+                    form.reset();
+                } else {
+                    // Ошибка от сервера
+                    showAlert('error', result.message || result.error || 'Произошла ошибка');
+                }
+            } catch (error) {
+                // Ошибка сети
+                showAlert('error', 'Не удалось отправить заявку. Проверьте подключение к интернету.');
+                console.error('Error:', error);
+            } finally {
+                loading.classList.remove('show');
+            }
+        });
+
+        // Функция показа уведомления
+        function showAlert(type, message) {
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            alert.classList.add('show');
+
+            // Скрыть через 5 секунд
+            setTimeout(() => {
+                alert.classList.remove('show');
+            }, 5000);
+        }
+
+        // Автоформатирование телефона
+        const phoneInput = document.getElementById('phone');
+        phoneInput.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 0) {
+                if (value[0] === '8') value = '7' + value.slice(1);
+                if (value[0] !== '7') value = '7' + value;
+            }
+            
+            let formatted = '+7';
+            if (value.length > 1) formatted += ' (' + value.slice(1, 4);
+            if (value.length >= 5) formatted += ') ' + value.slice(4, 7);
+            if (value.length >= 8) formatted += '-' + value.slice(7, 9);
+            if (value.length >= 10) formatted += '-' + value.slice(9, 11);
+            
+            e.target.value = formatted;
+        });
+    </script>
+</body>
+</html>
