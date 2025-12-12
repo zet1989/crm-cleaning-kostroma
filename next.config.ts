@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  // Вывод для Docker standalone сборки
+  output: 'standalone',
+  
   // Включаем Server Actions
   experimental: {
     serverActions: {
