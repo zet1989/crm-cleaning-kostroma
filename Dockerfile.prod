@@ -18,6 +18,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Копируем .env для build time (если существует)
+COPY .env* ./
+
 # Устанавливаем все зависимости (включая dev)
 RUN npm ci
 
