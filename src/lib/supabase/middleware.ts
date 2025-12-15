@@ -5,6 +5,14 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  // Пропускаем API роуты и статику
+  const pathname = request.nextUrl.pathname
+  if (pathname.startsWith('/api/') || 
+      pathname.startsWith('/_next/') || 
+      pathname.includes('.')) {
+    return response
+  }
+
   // Проверяем нашу собственную сессию из cookie
   const sessionCookie = request.cookies.get('session')
   let user = null
@@ -22,17 +30,16 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Защищённые роуты
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login') || 
-                     request.nextUrl.pathname.startsWith('/register')
-  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
-                           request.nextUrl.pathname.startsWith('/kanban') ||
-                           request.nextUrl.pathname.startsWith('/analytics') ||
-                           request.nextUrl.pathname.startsWith('/executors') ||
-                           request.nextUrl.pathname.startsWith('/managers') ||
-                           request.nextUrl.pathname.startsWith('/settings') ||
-                           request.nextUrl.pathname.startsWith('/calls') ||
-                           request.nextUrl.pathname.startsWith('/salaries') ||
-                           request.nextUrl.pathname.startsWith('/profile')
+  const isAuthPage = pathname === '/login' || pathname === '/register'
+  const isProtectedRoute = pathname.startsWith('/dashboard') ||
+                           pathname.startsWith('/kanban') ||
+                           pathname.startsWith('/analytics') ||
+                           pathname.startsWith('/executors') ||
+                           pathname.startsWith('/managers') ||
+                           pathname.startsWith('/settings') ||
+                           pathname.startsWith('/calls') ||
+                           pathname.startsWith('/salaries') ||
+                           pathname.startsWith('/profile')
 
   // Редирект неавторизованных пользователей
   if (!user && isProtectedRoute) {
