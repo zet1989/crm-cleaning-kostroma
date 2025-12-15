@@ -56,13 +56,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Проверяем пароль
-    // ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ОТЛАДКИ
-    // if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
-    //   return NextResponse.json(
-    //     { error: 'Неверный email или пароль' },
-    //     { status: 401 }
-    //   )
-    // }
+    if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
+      return NextResponse.json(
+        { error: 'Неверный email или пароль' },
+        { status: 401 }
+      )
+    }
     
     console.log('[AUTH] Login successful for:', user.email)
 
