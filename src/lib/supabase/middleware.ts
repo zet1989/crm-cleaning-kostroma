@@ -1,38 +1,25 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
+  const response = NextResponse.next({
     request,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+  // Проверяем нашу собственную сессию из cookie
+  const sessionCookie = request.cookies.get('session')
+  let user = null
 
-  // Обновление сессии
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  if (sessionCookie) {
+    try {
+      const sessionData = JSON.parse(sessionCookie.value)
+      // Проверяем, не истекла ли сессия
+      if (sessionData.expiresAt > Date.now()) {
+        user = sessionData
+      }
+    } catch {
+      // Невалидная сессия
+    }
+  }
 
   // Защищённые роуты
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') || 
@@ -43,7 +30,9 @@ export async function updateSession(request: NextRequest) {
                            request.nextUrl.pathname.startsWith('/executors') ||
                            request.nextUrl.pathname.startsWith('/managers') ||
                            request.nextUrl.pathname.startsWith('/settings') ||
-                           request.nextUrl.pathname.startsWith('/calls')
+                           request.nextUrl.pathname.startsWith('/calls') ||
+                           request.nextUrl.pathname.startsWith('/salaries') ||
+                           request.nextUrl.pathname.startsWith('/profile')
 
   // Редирект неавторизованных пользователей
   if (!user && isProtectedRoute) {
@@ -59,5 +48,5 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  return response
 }
