@@ -1,4 +1,7 @@
 -- Create admin user in Supabase Auth
+-- Enable pgcrypto extension if not exists
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 INSERT INTO auth.users (
     instance_id,
     id,
