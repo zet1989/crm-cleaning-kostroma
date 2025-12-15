@@ -5,12 +5,16 @@ import crypto from 'crypto'
 
 // Простая функция для проверки пароля
 function verifyPassword(password: string, hash: string): boolean {
-  // Временно используем простое сравнение
-  // В продакшене должен быть bcrypt
+  // SHA256 хеш введенного пароля
   const simpleHash = crypto
     .createHash('sha256')
     .update(password)
     .digest('hex')
+  
+  console.log('[AUTH] Input password hash:', simpleHash)
+  console.log('[AUTH] Stored hash:', hash)
+  console.log('[AUTH] Match:', simpleHash === hash)
+  
   return simpleHash === hash
 }
 
