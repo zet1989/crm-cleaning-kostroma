@@ -1,9 +1,9 @@
 -- Create admin profile
 INSERT INTO profiles (id, email, full_name, roles) 
-SELECT id, email, 'Admin', 'admin' 
+SELECT id, email, 'Admin', ARRAY['admin']::text[]
 FROM auth.users 
 WHERE email = 'admin@crm-kostroma.ru'
-ON CONFLICT (id) DO UPDATE SET roles = 'admin';
+ON CONFLICT (id) DO UPDATE SET roles = ARRAY['admin']::text[];
 
 -- Seed initial columns
 INSERT INTO columns (id, name, color, position) VALUES
