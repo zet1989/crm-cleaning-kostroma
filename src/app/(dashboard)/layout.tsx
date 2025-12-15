@@ -4,6 +4,7 @@ import { query } from '@/lib/db'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { Toaster } from '@/components/ui/sonner'
+import type { Profile } from '@/lib/supabase/database.types'
 
 interface SessionData {
   user: {
@@ -12,17 +13,6 @@ interface SessionData {
     role?: string
   }
   expiresAt: number
-}
-
-interface Profile {
-  id: string
-  email: string
-  full_name: string | null
-  role: string
-  phone: string | null
-  avatar_url: string | null
-  created_at: string
-  updated_at: string
 }
 
 export default async function DashboardLayout({
@@ -61,12 +51,14 @@ export default async function DashboardLayout({
     [userId]
   )
   
-  const profile = profileResult.rows[0] || {
+  const profile: Profile = profileResult.rows[0] || {
     id: userId,
     email: session.user.email,
     full_name: null,
-    role: session.user.role || 'user',
     phone: null,
+    roles: ['user'],
+    salary_percent: 0,
+    can_view_analytics: false,
     avatar_url: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
