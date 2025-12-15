@@ -30,5 +30,5 @@ INSERT INTO auth.users (
     '{"full_name": "Admin"}',
     false,
     ''
-) ON CONFLICT (email) DO NOTHING
+)
 RETURNING id, email;
