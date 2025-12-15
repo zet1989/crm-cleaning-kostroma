@@ -12,7 +12,6 @@ import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClient()
   
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,21 +23,27 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
 
-    if (error) {
-      setError(error.message === 'Invalid login credentials' 
-        ? 'Неверный email или пароль' 
-        : error.message)
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Ошибка входа')
+        setLoading(false)
+        return
+      }
+
+      router.push('/dashboard')
+      router.refresh()
+    } catch (err) {
+      setError('Ошибка подключения к серверу')
       setLoading(false)
-      return
     }
-
-    router.push('/dashboard')
-    router.refresh()
   }
 
   return (
