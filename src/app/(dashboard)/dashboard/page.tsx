@@ -1,88 +1,49 @@
-import { query } from '@/lib/db'
+import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatPrice } from '@/lib/utils'
 import { Kanban, Users, Phone, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
-interface Deal {
-  id: string
-  client_name: string
-  address: string
-  price: number
-  created_at: string
-  column_id: string
-  column_name: string
-  column_color: string
-}
-
-interface Column {
-  id: string
-  name: string
-  color: string
-  position: number
-  deals_count: number
-}
-
 export default async function DashboardPage() {
-  // Получаем статистику через прямые SQL запросы
+  const supabase = await createClient()
+
+  // Получаем статистику
   const [
-    totalDealsResult,
-    executorsResult,
-    callsTodayResult,
-    recentDealsResult,
-    columnsResult,
-    totalSumResult,
+    { count: totalDeals },
+    { count: activeDeals },
+    { count: executorsCount },
+    { count: callsToday },
+    { data: recentDeals },
+    { data: columns },
   ] = await Promise.all([
-    // Всего сделок
-    query<{ count: string }>('SELECT COUNT(*) as count FROM deals'),
-    // Активные исполнители
-    query<{ count: string }>('SELECT COUNT(*) as count FROM executors WHERE is_active = true'),
-    // Звонки сегодня
-    query<{ count: string }>(`SELECT COUNT(*) as count FROM calls WHERE created_at >= CURRENT_DATE`),
-    // Последние сделки с информацией о колонках
-    query<Deal>(`
-      SELECT 
-        d.id,
-        d.client_name,
-        d.address,
-        d.price,
-        d.created_at,
-        d.column_id,
-        c.name as column_name,
-        c.color as column_color
-      FROM deals d
-      LEFT JOIN columns c ON d.column_id = c.id
-      ORDER BY d.created_at DESC
-      LIMIT 5
-    `),
-    // Колонки с количеством сделок
-    query<Column>(`
-      SELECT 
-        c.id,
-        c.name,
-        c.color,
-        c.position,
-        COUNT(d.id)::int as deals_count
-      FROM columns c
-      LEFT JOIN deals d ON d.column_id = c.id
-      GROUP BY c.id, c.name, c.color, c.position
-      ORDER BY c.position
-    `),
-    // Сумма всех сделок
-    query<{ total: string }>('SELECT COALESCE(SUM(price), 0) as total FROM deals'),
+    supabase.from('deals').select('*', { count: 'exact', head: true }),
+    supabase.from('deals').select('*', { count: 'exact', head: true })
+      .not('column_id', 'in', '(select id from columns where name in (\'Завершено\', \'Отменено\'))'),
+    supabase.from('executors').select('*', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('calls').select('*', { count: 'exact', head: true })
+      .gte('created_at', new Date().toISOString().split('T')[0]),
+    supabase.from('deals').select(`
+      id,
+      client_name,
+      address,
+      price,
+      created_at,
+      column:columns(id, name, color)
+    `).order('created_at', { ascending: false }).limit(5),
+    supabase.from('columns').select('*, deals:deals(count)').order('position'),
   ])
 
-  const totalDeals = parseInt(totalDealsResult.rows[0]?.count || '0')
-  const executorsCount = parseInt(executorsResult.rows[0]?.count || '0')
-  const callsToday = parseInt(callsTodayResult.rows[0]?.count || '0')
-  const recentDeals = recentDealsResult.rows
-  const columns = columnsResult.rows
-  const totalActiveSum = parseFloat(totalSumResult.rows[0]?.total || '0')
+  // Считаем сумму активных сделок
+  const { data: activeDealsSum } = await supabase
+    .from('deals')
+    .select('price')
+  
+  const totalActiveSum = activeDealsSum?.reduce((sum, deal) => sum + (deal.price || 0), 0) || 0
 
   const stats = [
     {
       title: 'Всего сделок',
-      value: totalDeals,
+      value: totalDeals || 0,
       icon: Kanban,
       href: '/kanban',
       color: 'text-blue-600',
@@ -151,8 +112,8 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {columns?.map((column) => {
-                const count = column.deals_count || 0
+              {columns?.map((column: { id: string; name: string; color: string; deals: { count: number }[] }) => {
+                const count = column.deals?.[0]?.count || 0
                 const percentage = totalDeals ? Math.round((count / totalDeals) * 100) : 0
                 
                 return (
@@ -196,7 +157,7 @@ export default async function DashboardPage() {
                   Пока нет сделок. <Link href="/kanban" className="text-primary hover:underline">Создайте первую</Link>
                 </p>
               ) : (
-                recentDeals?.map((deal) => (
+                recentDeals?.map((deal: { id: string; client_name: string; address: string; price: number; column: { id: string; name: string; color: string } | null }) => (
                   <Link 
                     key={deal.id} 
                     href={`/kanban?deal=${deal.id}`}
@@ -208,15 +169,15 @@ export default async function DashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">{formatPrice(deal.price)}</p>
-                      {deal.column_name && (
+                      {deal.column && (
                         <div 
                           className="inline-flex items-center px-2 py-0.5 rounded text-xs"
                           style={{ 
-                            backgroundColor: `${deal.column_color}20`,
-                            color: deal.column_color 
+                            backgroundColor: `${deal.column.color}20`,
+                            color: deal.column.color 
                           }}
                         >
-                          {deal.column_name}
+                          {deal.column.name}
                         </div>
                       )}
                     </div>

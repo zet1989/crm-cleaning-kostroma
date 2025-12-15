@@ -1,20 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { Pool } from 'pg'
-
-// Пул подключений к PostgreSQL
-const pool = new Pool({
-  host: process.env.POSTGRES_HOST || 'postgres',
-  port: parseInt(process.env.POSTGRES_PORT || '5432'),
-  database: process.env.POSTGRES_DB || 'crm',
-  user: process.env.POSTGRES_USER || 'postgres',
-  password: process.env.POSTGRES_PASSWORD || 'postgres',
-})
-
-// ВРЕМЕННОЕ РЕШЕНИЕ: простая проверка пароля
-function verifyPassword(password: string): boolean {
-  return password === 'admin123'
-}
+import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,62 +12,43 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Ищем пользователя в БД напрямую через pg
-    const result = await pool.query(
-      'SELECT id, email, full_name, roles, password_hash FROM profiles WHERE email = $1',
-      [email]
-    )
-
-    const user = result.rows[0]
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Неверный email или пароль' },
-        { status: 401 }
-      )
-    }
-
-    // Проверяем пароль (временно hardcoded)
-    if (!verifyPassword(password)) {
-      return NextResponse.json(
-        { error: 'Неверный email или пароль' },
-        { status: 401 }
-      )
-    }
+    const supabase = await createClient()
     
-    console.log('[AUTH] Login successful for:', user.email)
+    // Авторизация через Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-    // Создаем сессионный токен (простой JWT альтернатива)
-    const sessionData = {
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.roles || 'user',
-      },
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 дней
+    if (error) {
+      console.log('[AUTH] Login failed:', error.message)
+      return NextResponse.json(
+        { error: 'Неверный email или пароль' },
+        { status: 401 }
+      )
     }
 
-    // Сохраняем сессию в куках
-    const cookieStore = await cookies()
-    cookieStore.set('session', JSON.stringify(sessionData), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 дней
-      path: '/',
-    })
+    const user = data.user
+    console.log('[AUTH] Login successful for:', user?.email)
+
+    // Получаем профиль пользователя
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
 
     return NextResponse.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
-        full_name: user.full_name,
-        roles: user.roles
+        full_name: profile?.full_name || user.email,
+        roles: profile?.roles || 'user',
       }
     })
   } catch (error) {
-    console.error('Login error:', error)
+    console.error('[AUTH] Login error:', error)
     return NextResponse.json(
       { error: 'Ошибка сервера' },
       { status: 500 }

@@ -1,33 +1,38 @@
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
-  const response = NextResponse.next({
+  let supabaseResponse = NextResponse.next({
     request,
   })
 
-  // Пропускаем API роуты и статику
-  const pathname = request.nextUrl.pathname
-  if (pathname.startsWith('/api/') || 
-      pathname.startsWith('/_next/') || 
-      pathname.includes('.')) {
-    return response
-  }
-
-  // Проверяем нашу собственную сессию из cookie
-  const sessionCookie = request.cookies.get('session')
-  let user = null
-
-  if (sessionCookie) {
-    try {
-      const sessionData = JSON.parse(sessionCookie.value)
-      // Проверяем, не истекла ли сессия
-      if (sessionData.expiresAt > Date.now()) {
-        user = sessionData
-      }
-    } catch {
-      // Невалидная сессия
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
     }
-  }
+  )
+
+  // ВАЖНО: Не удаляйте getUser() - это обновляет сессию при каждом запросе
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const pathname = request.nextUrl.pathname
 
   // Защищённые роуты
   const isAuthPage = pathname === '/login' || pathname === '/register'
@@ -55,5 +60,5 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  return response
+  return supabaseResponse
 }
