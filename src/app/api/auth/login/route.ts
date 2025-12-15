@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
+import { Pool } from 'pg'
 import crypto from 'crypto'
 
-// ВРЕМЕННОЕ РЕШЕНИЕ: простая проверка без хеширования
-function verifyPassword(password: string, hash: string): boolean {
-  // Для отладки: просто проверяем, что пароль = "admin123"
+// Пул подключений к PostgreSQL
+const pool = new Pool({
+  host: process.env.POSTGRES_HOST || 'postgres',
+  port: parseInt(process.env.POSTGRES_PORT || '5432'),
+  database: process.env.POSTGRES_DB || 'crm',
+  user: process.env.POSTGRES_USER || 'postgres',
+  password: process.env.POSTGRES_PASSWORD || 'postgres',
+})
+
+// ВРЕМЕННОЕ РЕШЕНИЕ: простая проверка пароля
+function verifyPassword(password: string): boolean {
   return password === 'admin123'
 }
 
@@ -20,34 +28,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Подключаемся к БД
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
+    // Ищем пользователя в БД напрямую через pg
+    const result = await pool.query(
+      'SELECT id, email, full_name, roles, password_hash FROM profiles WHERE email = $1',
+      [email]
     )
 
-    // Ищем пользователя
-    const { data: user, error } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, roles, password_hash')
-      .eq('email', email)
-      .single()
+    const user = result.rows[0]
 
-    if (error || !user) {
+    if (!user) {
       return NextResponse.json(
         { error: 'Неверный email или пароль' },
         { status: 401 }
       )
     }
 
-    // Проверяем пароль
-    if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
+    // Проверяем пароль (временно hardcoded)
+    if (!verifyPassword(password)) {
       return NextResponse.json(
         { error: 'Неверный email или пароль' },
         { status: 401 }
