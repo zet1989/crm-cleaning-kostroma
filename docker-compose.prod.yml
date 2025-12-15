@@ -45,6 +45,11 @@ services:
       NOVOFON_SECRET: ${NOVOFON_SECRET}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: crm
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your-super-secret-password}
     depends_on:
       postgres:
         condition: service_healthy
