@@ -258,6 +258,12 @@ services:
       NOVOFON_APP_ID: ${NOVOFON_APP_ID}
       NOVOFON_SECRET: ${NOVOFON_SECRET}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      # PostgreSQL direct connection
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
       kong:
         condition: service_started
