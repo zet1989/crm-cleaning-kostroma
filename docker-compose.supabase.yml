@@ -20,7 +20,7 @@ services:
       JWT_EXP: ${JWT_EXPIRY:-3600}
     volumes:
       - supabase_db_data:/var/lib/postgresql/data
-      - ./supabase/migrations:/docker-entrypoint-initdb.d/migrations
+      - ./supabase/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
       interval: 10s
