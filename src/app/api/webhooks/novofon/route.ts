@@ -29,6 +29,29 @@ export async function POST(request: NextRequest) {
     console.log(`[WEBHOOK:NOVOFON] Event: ${event}, Call ID: ${pbx_call_id || call_id}`)
     console.log(`[WEBHOOK:NOVOFON] Body:`, JSON.stringify(body, null, 2))
 
+    // ФИЛЬТРАЦИЯ: обрабатываем только звонки для внутреннего номера 100
+    const TARGET_INTERNAL = '100'
+    const TARGET_PHONE = '+79675558185' // Нормализованный формат
+    
+    // Проверяем внутренний номер или телефон
+    const normalizedCalledDid = called_did?.replace(/[^0-9]/g, '')
+    const normalizedTargetPhone = TARGET_PHONE.replace(/[^0-9]/g, '')
+    
+    const isTargetNumber = internal === TARGET_INTERNAL || 
+                          last_internal === TARGET_INTERNAL ||
+                          normalizedCalledDid === normalizedTargetPhone
+    
+    if (!isTargetNumber) {
+      console.log(`[WEBHOOK:NOVOFON] Skipping: not for target number (internal: ${internal}, called: ${called_did})`)
+      return NextResponse.json({ 
+        success: true, 
+        action: 'skipped',
+        reason: 'not_target_number'
+      })
+    }
+
+    console.log(`[WEBHOOK:NOVOFON] Processing for target number 100`)
+
     // Используем service_role для bypass RLS
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
