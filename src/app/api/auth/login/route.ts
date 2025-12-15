@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { Pool } from 'pg'
-import crypto from 'crypto'
 
 // Пул подключений к PostgreSQL
 const pool = new Pool({
@@ -54,11 +53,12 @@ export async function POST(request: NextRequest) {
     console.log('[AUTH] Login successful for:', user.email)
 
     // Создаем сессионный токен (простой JWT альтернатива)
-    const sessionToken = crypto.randomBytes(32).toString('hex')
     const sessionData = {
-      userId: user.id,
-      email: user.email,
-      roles: user.roles,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.roles || 'user',
+      },
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 дней
     }
 
@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 // 7 дней
+      maxAge: 7 * 24 * 60 * 60, // 7 дней
+      path: '/',
     })
 
     return NextResponse.json({

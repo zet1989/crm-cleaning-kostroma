@@ -1,28 +1,76 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { query } from '@/lib/db'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { Toaster } from '@/components/ui/sonner'
+
+interface SessionData {
+  user: {
+    id: string
+    email: string
+    role?: string
+  }
+  expiresAt: number
+}
+
+interface Profile {
+  id: string
+  email: string
+  full_name: string | null
+  role: string
+  phone: string | null
+  avatar_url: string | null
+  created_at: string
+  updated_at: string
+}
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
+  // Проверяем сессию из cookie
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get('session')
   
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
+  if (!sessionCookie?.value) {
     redirect('/login')
   }
 
-  // Получаем профиль пользователя
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  let session: SessionData
+  try {
+    session = JSON.parse(sessionCookie.value)
+  } catch {
+    redirect('/login')
+  }
+
+  // Проверяем срок действия сессии
+  if (session.expiresAt < Date.now()) {
+    redirect('/login')
+  }
+
+  const userId = session.user?.id
+  if (!userId) {
+    redirect('/login')
+  }
+
+  // Получаем профиль пользователя через прямой SQL
+  const profileResult = await query<Profile>(
+    'SELECT * FROM profiles WHERE id = $1 LIMIT 1',
+    [userId]
+  )
+  
+  const profile = profileResult.rows[0] || {
+    id: userId,
+    email: session.user.email,
+    full_name: null,
+    role: session.user.role || 'user',
+    phone: null,
+    avatar_url: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
