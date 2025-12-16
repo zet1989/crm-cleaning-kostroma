@@ -4,9 +4,12 @@ import type { Database } from './database.types'
 
 export async function createClient() {
   const cookieStore = await cookies()
+  
+  // Используем внутренний URL если доступен (для Docker сети)
+  const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL!
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {

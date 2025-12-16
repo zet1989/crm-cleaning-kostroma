@@ -39,8 +39,9 @@ export async function POST(request: NextRequest) {
         console.log('[AUTH] SuperAdmin login detected')
       } else {
         // Используем service_role для поиска профиля (обход RLS)
+        const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL!
         const adminClient = createSupabaseClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          supabaseUrl,
           process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
         
