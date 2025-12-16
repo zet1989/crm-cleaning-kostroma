@@ -64,13 +64,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Авторизация через Supabase Auth
+    console.log('[AUTH] Attempting signInWithPassword for:', loginEmail)
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password,
     })
 
     if (error) {
-      console.log('[AUTH] Login failed:', error.message)
+      console.log('[AUTH] Login failed:', error.message, error)
       return NextResponse.json(
         { error: 'Неверный телефон или пароль' },
         { status: 401 }
