@@ -23,12 +23,12 @@ export async function POST(request: NextRequest) {
     
     if (phone) {
       // Нормализуем телефон (убираем всё кроме цифр и добавляем +)
-      const normalizedPhone = phone.replace(/\D/g, '')
+      const normalizedPhone = '+' + phone.replace(/\D/g, '')
       
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('email')
-        .eq('phone', phone)
+        .eq('phone', normalizedPhone)
         .single()
       
       if (profileError || !profile?.email) {
