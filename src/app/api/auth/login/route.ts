@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,14 +26,20 @@ export async function POST(request: NextRequest) {
       // Нормализуем телефон (убираем всё кроме цифр и добавляем +)
       const normalizedPhone = '+' + phone.replace(/\D/g, '')
       
-      const { data: profile, error: profileError } = await supabase
+      // Используем service_role для поиска профиля (обход RLS)
+      const adminClient = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      
+      const { data: profile, error: profileError } = await adminClient
         .from('profiles')
         .select('email')
         .eq('phone', normalizedPhone)
         .single()
       
       if (profileError || !profile?.email) {
-        console.log('[AUTH] Phone not found:', phone)
+        console.log('[AUTH] Phone not found:', normalizedPhone, profileError?.message)
         return NextResponse.json(
           { error: 'Пользователь не найден' },
           { status: 401 }
