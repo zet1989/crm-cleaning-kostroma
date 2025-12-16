@@ -157,7 +157,10 @@ export default async function DashboardPage() {
                   Пока нет сделок. <Link href="/kanban" className="text-primary hover:underline">Создайте первую</Link>
                 </p>
               ) : (
-                recentDeals?.map((deal: { id: string; client_name: string; address: string; price: number; column: { id: string; name: string; color: string } | null }) => (
+                recentDeals?.map((deal) => {
+                  // column может быть массивом или объектом
+                  const column = Array.isArray(deal.column) ? deal.column[0] : deal.column
+                  return (
                   <Link 
                     key={deal.id} 
                     href={`/kanban?deal=${deal.id}`}
@@ -169,20 +172,20 @@ export default async function DashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">{formatPrice(deal.price)}</p>
-                      {deal.column && (
+                      {column && (
                         <div 
                           className="inline-flex items-center px-2 py-0.5 rounded text-xs"
                           style={{ 
-                            backgroundColor: `${deal.column.color}20`,
-                            color: deal.column.color 
+                            backgroundColor: `${column.color}20`,
+                            color: column.color 
                           }}
                         >
-                          {deal.column.name}
+                          {column.name}
                         </div>
                       )}
                     </div>
                   </Link>
-                ))
+                )})
               )}
             </div>
           </CardContent>
