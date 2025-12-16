@@ -42,6 +42,7 @@ import { AllStatsDialog } from '@/components/stats/all-stats-dialog'
 interface Manager {
   id: string
   email: string
+  phone?: string
   full_name: string
   roles: string[]
   salary_percent: number
@@ -61,7 +62,7 @@ export default function ManagersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedManager, setSelectedManager] = useState<Manager | null>(null)
   const [formData, setFormData] = useState({
-    email: '',
+    phone: '',
     password: '',
     full_name: '',
     roles: ['manager'] as string[],
@@ -194,7 +195,7 @@ export default function ManagersPage() {
   function openCreateDialog() {
     setSelectedManager(null)
     setFormData({
-      email: '',
+      phone: '',
       password: '',
       full_name: '',
       roles: ['manager'],
@@ -207,7 +208,7 @@ export default function ManagersPage() {
   function openEditDialog(manager: Manager) {
     setSelectedManager(manager)
     setFormData({
-      email: manager.email,
+      phone: manager.phone || '',
       password: '', // Не показываем пароль
       full_name: manager.full_name || '',
       roles: manager.roles || ['manager'],
@@ -229,7 +230,7 @@ export default function ManagersPage() {
 
   async function handleSave() {
     if (!formData.full_name) return
-    if (!selectedManager && (!formData.email || !formData.password)) return
+    if (!selectedManager && (!formData.phone || !formData.password)) return
 
     setSaving(true)
     try {
@@ -253,7 +254,7 @@ export default function ManagersPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: formData.email,
+            phone: formData.phone,
             password: formData.password,
             full_name: formData.full_name,
             roles: formData.roles,
@@ -409,7 +410,7 @@ export default function ManagersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Имя</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Телефон</TableHead>
                 <TableHead>Роли</TableHead>
                 <TableHead className="text-right">% ЗП</TableHead>
                 <TableHead className="text-right">Сделок</TableHead>
@@ -423,7 +424,7 @@ export default function ManagersPage() {
               {managers.map(manager => (
                 <TableRow key={manager.id}>
                   <TableCell className="font-medium">{manager.full_name}</TableCell>
-                  <TableCell className="text-muted-foreground">{manager.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{manager.phone || manager.email}</TableCell>
                   <TableCell>{getRoleBadges(manager.roles || [])}</TableCell>
                   <TableCell className="text-right">{manager.salary_percent}%</TableCell>
                   <TableCell className="text-right">{manager.totalDeals || 0}</TableCell>
@@ -518,14 +519,17 @@ export default function ManagersPage() {
             {!selectedManager && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="phone">Телефон *</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="manager@example.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    id="phone"
+                    type="tel"
+                    placeholder="+7 (999) 123-45-67"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Используется для входа в систему
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Пароль *</Label>
@@ -604,7 +608,7 @@ export default function ManagersPage() {
             </Button>
             <Button 
               onClick={handleSave} 
-              disabled={saving || !formData.full_name || (!selectedManager && (!formData.email || !formData.password))}
+              disabled={saving || !formData.full_name || (!selectedManager && (!formData.phone || !formData.password))}
             >
               {saving ? 'Сохранение...' : selectedManager ? 'Сохранить' : 'Создать'}
             </Button>

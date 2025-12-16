@@ -114,9 +114,10 @@ interface DealDialogProps {
   columnId: string | null
   columns: Column[]
   executors: Executor[]
+  onDealSaved?: () => void
 }
 
-export function DealDialog({ open, onOpenChange, deal, columnId, columns, executors }: DealDialogProps) {
+export function DealDialog({ open, onOpenChange, deal, columnId, columns, executors, onDealSaved }: DealDialogProps) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -723,6 +724,10 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
 
       toast.success(deal ? 'Сделка обновлена' : 'Сделка создана')
       onOpenChange(false)
+      // Вызываем callback для обновления списка сделок
+      if (onDealSaved) {
+        onDealSaved()
+      }
     } catch (error) {
       toast.error('Ошибка при сохранении')
       console.error(error)

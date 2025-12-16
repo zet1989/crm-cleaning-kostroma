@@ -62,6 +62,18 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
     return false
   })
 
+  // Функция для перезагрузки сделок
+  const refreshDeals = async () => {
+    const { data } = await supabase
+      .from('deals')
+      .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
+      .order('position')
+    
+    if (data) {
+      setDeals(data)
+    }
+  }
+
   // Fix hydration mismatch - only render DnD on client
   useEffect(() => {
     setMounted(true)
@@ -399,6 +411,7 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
         columnId={selectedColumnId}
         columns={columns}
         executors={executors}
+        onDealSaved={refreshDeals}
       />
     </DndContext>
   )

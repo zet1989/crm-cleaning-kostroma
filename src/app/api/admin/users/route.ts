@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { v4 as uuidv4 } from 'uuid'
+import * as bcrypt from 'bcryptjs'
 
-// Функция для создания админского клиента
+// Функция для создания админского клиента с прямым подключением к БД через REST API
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,6 +12,9 @@ function getSupabaseAdmin() {
       auth: {
         autoRefreshToken: false,
         persistSession: false
+      },
+      db: {
+        schema: 'public'
       }
     }
   )
@@ -19,45 +24,92 @@ export async function POST(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
     const body = await request.json()
-    const { email, password, full_name, roles, salary_percent, can_view_analytics } = body
+    const { phone, password, full_name, roles, salary_percent, can_view_analytics } = body
 
-    // Создаём пользователя через Admin API
-    const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // Автоматически подтверждаем email
-      user_metadata: {
-        full_name
-      }
-    })
-
-    if (createError) {
-      return NextResponse.json({ message: createError.message }, { status: 400 })
+    if (!phone || !password || !full_name) {
+      return NextResponse.json({ message: 'Телефон, пароль и имя обязательны' }, { status: 400 })
     }
 
-    if (!userData.user) {
-      return NextResponse.json({ message: 'Failed to create user' }, { status: 500 })
+    // Нормализуем телефон
+    const normalizedPhone = phone.replace(/\D/g, '')
+    if (normalizedPhone.length !== 11) {
+      return NextResponse.json({ message: 'Неверный формат телефона' }, { status: 400 })
     }
+    
+    const formattedPhone = '+' + normalizedPhone
 
-    // Обновляем профиль с дополнительными данными
-    const { error: profileError } = await supabaseAdmin
+    // Проверяем, не существует ли уже пользователь с таким телефоном
+    const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
-      .update({
-        full_name,
-        roles: roles || ['manager'],
-        salary_percent: salary_percent || 10,
-        can_view_analytics: can_view_analytics ?? true
-      })
-      .eq('id', userData.user.id)
+      .select('id')
+      .eq('phone', formattedPhone)
+      .single()
 
-    if (profileError) {
-      console.error('Error updating profile:', profileError)
+    if (existingProfile) {
+      return NextResponse.json({ message: 'Пользователь с таким телефоном уже существует' }, { status: 400 })
     }
 
-    return NextResponse.json({ 
-      user: userData.user,
-      message: 'User created successfully' 
-    })
+    // Генерируем уникальный email на основе телефона (для Supabase Auth)
+    const generatedEmail = `user_${normalizedPhone}@crm-kostroma.ru`
+    
+    // Пробуем создать через Admin API
+    try {
+      const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: generatedEmail,
+        password,
+        email_confirm: true,
+        phone: formattedPhone,
+        phone_confirm: true,
+        user_metadata: {
+          full_name,
+          phone: formattedPhone
+        }
+      })
+
+      if (createError) {
+        console.error('Admin API error:', createError)
+        // Если Admin API не работает, возвращаем ошибку с инструкцией
+        return NextResponse.json({ 
+          message: 'Ошибка создания пользователя. Обратитесь к администратору.',
+          details: createError.message
+        }, { status: 500 })
+      }
+
+      if (!userData.user) {
+        return NextResponse.json({ message: 'Failed to create user' }, { status: 500 })
+      }
+
+      // Обновляем профиль с дополнительными данными
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .update({
+          full_name,
+          phone: formattedPhone,
+          email: generatedEmail,
+          roles: roles || ['manager'],
+          salary_percent: salary_percent || 10,
+          can_view_analytics: can_view_analytics ?? true
+        })
+        .eq('id', userData.user.id)
+
+      if (profileError) {
+        console.error('Error updating profile:', profileError)
+      }
+
+      return NextResponse.json({ 
+        user: {
+          id: userData.user.id,
+          phone: formattedPhone,
+          full_name
+        },
+        message: 'Пользователь создан успешно' 
+      })
+    } catch (authError) {
+      console.error('Auth creation failed:', authError)
+      return NextResponse.json({ 
+        message: 'Ошибка авторизации при создании пользователя' 
+      }, { status: 500 })
+    }
   } catch (error) {
     console.error('Error creating user:', error)
     return NextResponse.json(
