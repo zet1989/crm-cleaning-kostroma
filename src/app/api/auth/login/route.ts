@@ -30,10 +30,13 @@ export async function POST(request: NextRequest) {
       }
       const normalizedPhone = '+' + digits
       
-      // Для админа используем прямой email (временный хардкод пока не исправим Kong)
+      // Для админов используем прямой email (временный хардкод пока не исправим Kong)
       if (normalizedPhone === '+79999999999') {
         loginEmail = 'admin@crm-kostroma.ru'
         console.log('[AUTH] Admin login detected')
+      } else if (normalizedPhone === '+71234567890') {
+        loginEmail = 'superadmin@crm-kostroma.ru'
+        console.log('[AUTH] SuperAdmin login detected')
       } else {
         // Используем service_role для поиска профиля (обход RLS)
         const adminClient = createSupabaseClient(
