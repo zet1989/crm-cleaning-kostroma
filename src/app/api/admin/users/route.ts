@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { v4 as uuidv4 } from 'uuid'
-import * as bcrypt from 'bcryptjs'
 
 // Функция для создания админского клиента с прямым подключением к БД через REST API
 function getSupabaseAdmin() {
