@@ -16,33 +16,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Форматирование телефона
-  const formatPhone = (value: string) => {
+  // Нормализация телефона для отправки
+  const normalizePhone = (value: string) => {
     // Убираем все кроме цифр
-    const digits = value.replace(/\D/g, '')
+    let digits = value.replace(/\D/g, '')
     
-    // Форматируем
-    if (digits.length === 0) return ''
-    if (digits.length <= 1) return `+7 (${digits}`
-    if (digits.length <= 4) return `+7 (${digits.slice(1)}`
-    if (digits.length <= 7) return `+7 (${digits.slice(1, 4)}) ${digits.slice(4)}`
-    if (digits.length <= 9) return `+7 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
-    return `+7 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`
-  }
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    // Если пользователь удаляет, позволяем
-    if (value.length < phone.length) {
-      setPhone(value)
-      return
+    // Если начинается с 8, заменяем на 7
+    if (digits.startsWith('8')) {
+      digits = '7' + digits.slice(1)
     }
-    setPhone(formatPhone(value))
-  }
-
-  // Получаем чистый номер для отправки
-  const getCleanPhone = () => {
-    return '+7' + phone.replace(/\D/g, '').slice(1)
+    // Если начинается не с 7, добавляем 7
+    if (!digits.startsWith('7') && digits.length === 10) {
+      digits = '7' + digits
+    }
+    
+    return '+' + digits
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -50,11 +38,11 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const cleanPhone = getCleanPhone()
+    const cleanPhone = normalizePhone(phone)
     
-    // Валидация телефона
+    // Валидация телефона (должно быть 12 символов: +7 и 10 цифр)
     if (cleanPhone.length !== 12) {
-      setError('Введите корректный номер телефона')
+      setError('Введите корректный номер телефона (например: 89999999999)')
       setLoading(false)
       return
     }
@@ -107,9 +95,9 @@ export default function LoginPage() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="+7 (999) 123-45-67"
+                  placeholder="89999999999"
                   value={phone}
-                  onChange={handlePhoneChange}
+                  onChange={(e) => setPhone(e.target.value)}
                   className="pl-10"
                   required
                   disabled={loading}

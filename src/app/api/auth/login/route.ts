@@ -23,8 +23,12 @@ export async function POST(request: NextRequest) {
     let loginEmail = email
     
     if (phone) {
-      // Нормализуем телефон (убираем всё кроме цифр и добавляем +)
-      const normalizedPhone = '+' + phone.replace(/\D/g, '')
+      // Нормализуем телефон (убираем всё кроме цифр, 8 -> 7, добавляем +)
+      let digits = phone.replace(/\D/g, '')
+      if (digits.startsWith('8')) {
+        digits = '7' + digits.slice(1)
+      }
+      const normalizedPhone = '+' + digits
       
       // Используем service_role для поиска профиля (обход RLS)
       const adminClient = createSupabaseClient(
