@@ -30,27 +30,33 @@ export async function POST(request: NextRequest) {
       }
       const normalizedPhone = '+' + digits
       
-      // Используем service_role для поиска профиля (обход RLS)
-      const adminClient = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-      
-      const { data: profile, error: profileError } = await adminClient
-        .from('profiles')
-        .select('email')
-        .eq('phone', normalizedPhone)
-        .single()
-      
-      if (profileError || !profile?.email) {
-        console.log('[AUTH] Phone not found:', normalizedPhone, profileError?.message)
-        return NextResponse.json(
-          { error: 'Пользователь не найден' },
-          { status: 401 }
+      // Для админа используем прямой email (временный хардкод пока не исправим Kong)
+      if (normalizedPhone === '+79999999999') {
+        loginEmail = 'admin@crm-kostroma.ru'
+        console.log('[AUTH] Admin login detected')
+      } else {
+        // Используем service_role для поиска профиля (обход RLS)
+        const adminClient = createSupabaseClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
+        
+        const { data: profile, error: profileError } = await adminClient
+          .from('profiles')
+          .select('email')
+          .eq('phone', normalizedPhone)
+          .single()
+        
+        if (profileError || !profile?.email) {
+          console.log('[AUTH] Phone not found:', normalizedPhone, profileError?.message)
+          return NextResponse.json(
+            { error: 'Пользователь не найден' },
+            { status: 401 }
+          )
+        }
+        
+        loginEmail = profile.email
       }
-      
-      loginEmail = profile.email
     }
 
     // Авторизация через Supabase Auth
