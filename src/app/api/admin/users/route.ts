@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Функция для создания админского клиента с прямым подключением к БД через REST API
 function getSupabaseAdmin() {
+  // Используем внутренний URL для обхода Kong и прямого доступа к сервисам
+  const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL!
+  console.log('[ADMIN API] Creating admin client with URL:', supabaseUrl)
+  
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       auth: {
