@@ -81,11 +81,13 @@ export default function AnalyticsPage() {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('can_view_analytics')
+          .select('can_view_analytics, roles')
           .eq('id', user.id)
           .single()
         
-        if (profile && !profile.can_view_analytics) {
+        // Админы всегда имеют доступ к аналитике
+        const isAdmin = profile?.roles?.includes('admin')
+        if (profile && !profile.can_view_analytics && !isAdmin) {
           setCanViewAnalytics(false)
           setLoading(false)
           return
@@ -441,12 +443,15 @@ export default function AnalyticsPage() {
 
   if (!canViewAnalytics) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>Доступ ограничен</CardTitle>
-            <CardDescription>
-              У вас нет доступа к странице аналитики. Обратитесь к администратору.
+      <div className="flex items-center justify-center min-h-[60vh] p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader className="space-y-3">
+            <div className="mx-auto w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+              <BarChart3 className="w-6 h-6 text-orange-600" />
+            </div>
+            <CardTitle className="text-xl">Доступ ограничен</CardTitle>
+            <CardDescription className="text-base">
+              У вас нет доступа к странице аналитики. Обратитесь к администратору для получения прав.
             </CardDescription>
           </CardHeader>
         </Card>
