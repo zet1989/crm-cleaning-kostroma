@@ -54,6 +54,8 @@ export async function POST(request: NextRequest) {
 
     // Используем service_role для bypass RLS + внутренний URL для прямого доступа к Kong
     const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL!
+    console.log(`[WEBHOOK:NOVOFON] Using Supabase URL: ${supabaseUrl}`)
+    
     const supabase = createServerClient(
       supabaseUrl,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -189,15 +191,23 @@ export async function POST(request: NextRequest) {
       // - Повторный клиент: перемещаем сделку в "Новые"
       
       // Находим колонку "Новые"
-      const { data: newColumn } = await supabase
+      const { data: newColumn, error: columnError } = await supabase
         .from('columns')
         .select('id')
         .eq('name', 'Новые')
         .single()
 
+      if (columnError) {
+        console.error('[WEBHOOK:NOVOFON] Column query error:', columnError)
+        throw new Error(`Column query failed: ${columnError.message}`)
+      }
+
       if (!newColumn) {
+        console.error('[WEBHOOK:NOVOFON] Column "Новые" not found in database')
         throw new Error('Column "Новые" not found')
       }
+      
+      console.log('[WEBHOOK:NOVOFON] Found column "Новые":', newColumn.id)
 
       // Получаем позицию
       const { data: maxPositionDeal } = await supabase
