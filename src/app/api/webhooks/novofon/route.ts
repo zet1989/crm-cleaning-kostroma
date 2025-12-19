@@ -52,9 +52,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[WEBHOOK:NOVOFON] Processing for target number 100`)
 
-    // Используем service_role для bypass RLS
+    // Используем service_role для bypass RLS + внутренний URL для прямого доступа к Kong
+    const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL!
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabaseUrl,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
         auth: {
