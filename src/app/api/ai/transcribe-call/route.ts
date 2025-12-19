@@ -35,10 +35,13 @@ export async function POST(request: NextRequest) {
     // Получаем настройки AI
     const { data: aiSettings } = await supabase
       .from('ai_settings')
-      .select('openrouter_api_key, selected_model, system_prompt, auto_transcribe_calls')
+      .select('openrouter_api_key, transcription_api_key, transcription_model, selected_model, system_prompt, auto_transcribe_calls')
       .single()
 
-    if (!aiSettings?.openrouter_api_key) {
+    const apiKey = aiSettings?.transcription_api_key || aiSettings?.openrouter_api_key
+    const whisperModel = aiSettings?.transcription_model || 'openai/whisper-large-v3'
+
+    if (!apiKey) {
       console.log('[AI:TRANSCRIBE-CALL] No OpenRouter API key configured')
       return NextResponse.json(
         { error: 'OpenRouter API key not configured' },
@@ -99,13 +102,13 @@ export async function POST(request: NextRequest) {
     // Транскрибируем через OpenRouter Whisper
     const formData = new FormData()
     formData.append('file', audioFile)
-    formData.append('model', 'whisper-1')
+    formData.append('model', whisperModel)
     formData.append('language', 'ru')
 
     const transcribeResponse = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiSettings.openrouter_api_key}`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: formData
     })
@@ -127,7 +130,7 @@ export async function POST(request: NextRequest) {
         const analysisResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${aiSettings.openrouter_api_key}`,
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({

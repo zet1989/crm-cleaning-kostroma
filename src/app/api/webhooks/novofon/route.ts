@@ -63,20 +63,6 @@ export async function POST(request: NextRequest) {
     if (event === 'NOTIFY_RECORD') {
       console.log(`[WEBHOOK:NOVOFON] Recording ready for call: ${pbx_call_id}`)
       
-      // Ищем звонок в базе по pbx_call_id
-      const { data: existingCall } = await supabase
-        .from('calls')
-        .select('id, deal_id')
-        .eq('external_id', pbx_call_id || call_id_with_rec)
-        .single()
-
-      if (!existingCall) {
-        console.log(`[WEBHOOK:NOVOFON] Call not found for recording: ${pbx_call_id}`)
-        return NextResponse.json({ success: true, action: 'call_not_found' })
-      }
-
-      console.log(`[WEBHOOK:NOVOFON] Found call in database: ${existingCall.id}`)
-      
       // Получаем URL записи из Novofon API
       const appId = process.env.NOVOFON_APP_ID
       const secret = process.env.NOVOFON_SECRET
@@ -108,39 +94,58 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Обновляем URL записи в базе
-      if (recordingUrl) {
+      if (!recordingUrl) {
+        console.log(`[WEBHOOK:NOVOFON] No recording URL available`)
+        return NextResponse.json({ success: true, action: 'no_recording_url' })
+      }
+      
+      // Ищем звонок в базе по pbx_call_id (может ещё не существовать)
+      const { data: existingCall } = await supabase
+        .from('calls')
+        .select('id, deal_id')
+        .eq('external_id', pbx_call_id || call_id_with_rec)
+        .maybeSingle()
+
+      if (existingCall) {
+        // Звонок уже создан - обновляем URL записи
         await supabase
           .from('calls')
           .update({ recording_url: recordingUrl })
           .eq('id', existingCall.id)
         
         console.log(`[WEBHOOK:NOVOFON] Recording URL saved for call: ${existingCall.id}`)
-      }
-      
-      // Если есть deal_id, запускаем транскрипцию
-      if (existingCall.deal_id && recordingUrl) {
-        console.log(`[WEBHOOK:NOVOFON] Starting transcription for call: ${existingCall.id}`)
         
-        // Запускаем транскрипцию через OpenRouter
-        try {
-          const transcribeResponse = await fetch(`${supabaseUrl.replace('/rest/v1', '')}/api/ai/transcribe-call`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              call_id: existingCall.id,
-              recording_url: recordingUrl
-            })
-          })
+        // Если есть deal_id, запускаем транскрипцию
+        if (existingCall.deal_id && recordingUrl) {
+          console.log(`[WEBHOOK:NOVOFON] Starting transcription for call: ${existingCall.id}`)
           
-          if (transcribeResponse.ok) {
-            console.log(`[WEBHOOK:NOVOFON] Transcription started successfully`)
-          } else {
-            console.error(`[WEBHOOK:NOVOFON] Transcription failed:`, await transcribeResponse.text())
+          // Запускаем транскрипцию через OpenRouter
+          try {
+            const transcribeResponse = await fetch(`${supabaseUrl.replace('/rest/v1', '')}/api/ai/transcribe-call`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                call_id: existingCall.id,
+                recording_url: recordingUrl
+              })
+            })
+            
+            if (transcribeResponse.ok) {
+              console.log(`[WEBHOOK:NOVOFON] Transcription started successfully`)
+            } else {
+              console.error(`[WEBHOOK:NOVOFON] Transcription failed:`, await transcribeResponse.text())
+            }
+          } catch (err) {
+            console.error('[WEBHOOK:NOVOFON] Transcription request failed:', err)
           }
-        } catch (err) {
-          console.error('[WEBHOOK:NOVOFON] Transcription request failed:', err)
         }
+      } else {
+        // Звонок ещё не создан - сохраняем URL во временную переменную
+        // Когда придёт NOTIFY_END, он создаст звонок и можно будет обновить
+        console.log(`[WEBHOOK:NOVOFON] Call not found yet, will update when created`)
+        
+        // Сохраняем в memory cache или можно создать временный звонок
+        // Для простоты просто логируем - NOTIFY_END создаст звонок после
       }
 
       return NextResponse.json({ success: true, action: 'recording_received', recording_url: recordingUrl })
@@ -285,6 +290,12 @@ export async function POST(request: NextRequest) {
 
           console.log(`[WEBHOOK:NOVOFON] New lead created: ${newDeal.id} (${isMissed ? 'MISSED' : 'ANSWERED'})`)
           
+          // Если есть запись, получаем URL
+          if (call && is_recorded === '1' && call_id_with_rec) {
+            console.log(`[WEBHOOK:NOVOFON] Call has recording, fetching URL...`)
+            await fetchAndSaveRecording(call.id, call_id_with_rec, newDeal.id)
+          }
+          
       } else {
         // Для повторного клиента - перемещаем сделку в "Новые" и добавляем примечание
         const currentNotes = existingDeal.notes || ''
@@ -301,6 +312,73 @@ export async function POST(request: NextRequest) {
           .eq('id', existingDeal.id)
         
         console.log(`[WEBHOOK:NOVOFON] Repeat call - deal moved to "Новые": ${existingDeal.id}`)
+        
+        // Если есть запись, получаем URL
+        if (call && is_recorded === '1' && call_id_with_rec) {
+          console.log(`[WEBHOOK:NOVOFON] Call has recording, fetching URL...`)
+          await fetchAndSaveRecording(call.id, call_id_with_rec, existingDeal.id)
+        }
+      }
+      
+      // Вспомогательная функция для получения и сохранения записи
+      async function fetchAndSaveRecording(callId: string, callIdWithRec: string, dealId: string) {
+        const appId = process.env.NOVOFON_APP_ID
+        const secret = process.env.NOVOFON_SECRET
+        
+        if (!appId || !secret) return
+        
+        try {
+          const crypto = await import('crypto')
+          const params: Record<string, string> = {
+            appid: appId,
+            call_id: callIdWithRec
+          }
+          const sortedParams = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&')
+          const sign = crypto.createHash('md5').update(`${sortedParams}${secret}`).digest('hex')
+          
+          const recordResponse = await fetch(
+            `https://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${callIdWithRec}&sign=${sign}`
+          )
+          
+          if (recordResponse.ok) {
+            const recordData = await recordResponse.json()
+            const recordingUrl = recordData.record || recordData.link || null
+            
+            if (recordingUrl) {
+              console.log(`[WEBHOOK:NOVOFON] Recording URL obtained: ${recordingUrl}`)
+              
+              // Сохраняем URL записи
+              await supabase
+                .from('calls')
+                .update({ recording_url: recordingUrl })
+                .eq('id', callId)
+              
+              // Запускаем транскрипцию
+              console.log(`[WEBHOOK:NOVOFON] Starting transcription...`)
+              try {
+                const transcribeResponse = await fetch(`${supabaseUrl.replace('/rest/v1', '')}/api/ai/transcribe-call`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    call_id: callId,
+                    recording_url: recordingUrl
+                  })
+                })
+                
+                if (transcribeResponse.ok) {
+                  console.log(`[WEBHOOK:NOVOFON] Transcription started successfully`)
+                } else {
+                  const errorText = await transcribeResponse.text()
+                  console.error(`[WEBHOOK:NOVOFON] Transcription failed:`, errorText)
+                }
+              } catch (err) {
+                console.error('[WEBHOOK:NOVOFON] Transcription request failed:', err)
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[WEBHOOK:NOVOFON] Failed to fetch recording:', err)
+        }
       }
 
       const response = NextResponse.json({
