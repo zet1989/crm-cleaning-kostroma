@@ -52,13 +52,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`[WEBHOOK:NOVOFON] Processing for target number 100`)
 
-    // Используем service_role для bypass RLS с внешним URL (Kong работает корректно)
+    // Используем anon key (RLS отключен на нужных таблицах)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     console.log(`[WEBHOOK:NOVOFON] Using Supabase URL: ${supabaseUrl}`)
     
     const supabase = createServerClient(
       supabaseUrl,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         auth: {
           autoRefreshToken: false,
