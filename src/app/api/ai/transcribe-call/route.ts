@@ -20,10 +20,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[AI:TRANSCRIBE-CALL] Starting for call: ${call_id}`)
 
-    // Используем service_role для bypass RLS
+    // Используем anon key (RLS отключен на нужных таблицах)
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         auth: {
           autoRefreshToken: false,

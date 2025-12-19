@@ -41,28 +41,8 @@ export async function POST(request: NextRequest) {
     console.log(`[WEBHOOK:NOVOFON] Event: ${event}, Call ID: ${pbx_call_id || call_id}`)
     console.log(`[WEBHOOK:NOVOFON] Body:`, JSON.stringify(body, null, 2))
 
-    // ФИЛЬТРАЦИЯ: обрабатываем только звонки для внутреннего номера 100
-    const TARGET_INTERNAL = '100'
-    const TARGET_PHONE = '+79675558185' // Нормализованный формат
-    
-    // Проверяем внутренний номер или телефон
-    const normalizedCalledDid = called_did?.replace(/[^0-9]/g, '')
-    const normalizedTargetPhone = TARGET_PHONE.replace(/[^0-9]/g, '')
-    
-    const isTargetNumber = internal === TARGET_INTERNAL || 
-                          last_internal === TARGET_INTERNAL ||
-                          normalizedCalledDid === normalizedTargetPhone
-    
-    if (!isTargetNumber) {
-      console.log(`[WEBHOOK:NOVOFON] Skipping: not for target number (internal: ${internal}, called: ${called_did})`)
-      return NextResponse.json({ 
-        success: true, 
-        action: 'skipped',
-        reason: 'not_target_number'
-      })
-    }
-
-    console.log(`[WEBHOOK:NOVOFON] Processing for target number 100`)
+    console.log(`[WEBHOOK:NOVOFON] Event: ${event}, Call ID: ${pbx_call_id || call_id}`)
+    console.log(`[WEBHOOK:NOVOFON] Body:`, JSON.stringify(body, null, 2))
 
     // Используем anon key (RLS отключен на нужных таблицах)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -82,6 +62,20 @@ export async function POST(request: NextRequest) {
     // 2. Обработка события NOTIFY_RECORD (запись звонка готова)
     if (event === 'NOTIFY_RECORD') {
       console.log(`[WEBHOOK:NOVOFON] Recording ready for call: ${pbx_call_id}`)
+      
+      // Ищем звонок в базе по pbx_call_id
+      const { data: existingCall } = await supabase
+        .from('calls')
+        .select('id, deal_id')
+        .eq('external_id', pbx_call_id || call_id_with_rec)
+        .single()
+
+      if (!existingCall) {
+        console.log(`[WEBHOOK:NOVOFON] Call not found for recording: ${pbx_call_id}`)
+        return NextResponse.json({ success: true, action: 'call_not_found' })
+      }
+
+      console.log(`[WEBHOOK:NOVOFON] Found call in database: ${existingCall.id}`)
       
       // Получаем URL записи из Novofon API
       const appId = process.env.NOVOFON_APP_ID
@@ -114,41 +108,38 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Найти звонок и обновить информацию о записи
-      const { data: existingCall } = await supabase
-        .from('calls')
-        .select('id, deal_id')
-        .or(`external_id.eq.${pbx_call_id},external_id.eq.${call_id_with_rec}`)
-        .single()
-
-      if (existingCall) {
-        // Обновляем URL записи в базе
-        if (recordingUrl) {
-          await supabase
-            .from('calls')
-            .update({ recording_url: recordingUrl })
-            .eq('id', existingCall.id)
-          
-          console.log(`[WEBHOOK:NOVOFON] Recording URL saved for call: ${existingCall.id}`)
-        }
+      // Обновляем URL записи в базе
+      if (recordingUrl) {
+        await supabase
+          .from('calls')
+          .update({ recording_url: recordingUrl })
+          .eq('id', existingCall.id)
         
-        const { data: aiSettings } = await supabase
-          .from('ai_settings')
-          .select('auto_transcribe_calls, openrouter_api_key')
-          .single()
-
-        if (aiSettings?.auto_transcribe_calls && aiSettings?.openrouter_api_key && existingCall.deal_id) {
-          // Запускаем транскрипцию асинхронно
-          fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/ai/transcribe-call`, {
+        console.log(`[WEBHOOK:NOVOFON] Recording URL saved for call: ${existingCall.id}`)
+      }
+      
+      // Если есть deal_id, запускаем транскрипцию
+      if (existingCall.deal_id && recordingUrl) {
+        console.log(`[WEBHOOK:NOVOFON] Starting transcription for call: ${existingCall.id}`)
+        
+        // Запускаем транскрипцию через OpenRouter
+        try {
+          const transcribeResponse = await fetch(`${supabaseUrl.replace('/rest/v1', '')}/api/ai/transcribe-call`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               call_id: existingCall.id,
-              pbx_call_id: pbx_call_id,
-              call_id_with_rec: call_id_with_rec,
               recording_url: recordingUrl
             })
-          }).catch(err => console.error('[WEBHOOK:NOVOFON] Transcription request failed:', err))
+          })
+          
+          if (transcribeResponse.ok) {
+            console.log(`[WEBHOOK:NOVOFON] Transcription started successfully`)
+          } else {
+            console.error(`[WEBHOOK:NOVOFON] Transcription failed:`, await transcribeResponse.text())
+          }
+        } catch (err) {
+          console.error('[WEBHOOK:NOVOFON] Transcription request failed:', err)
         }
       }
 
@@ -157,6 +148,29 @@ export async function POST(request: NextRequest) {
 
     // 3. Обрабатываем завершённые ВХОДЯЩИЕ звонки (NOTIFY_END)
     if (event === 'NOTIFY_END' && caller_id && called_did) {
+      
+      // ФИЛЬТРАЦИЯ: обрабатываем только звонки для внутреннего номера 100
+      const TARGET_INTERNAL = '100'
+      const TARGET_PHONE = '+79675558185' // Нормализованный формат
+      
+      // Проверяем внутренний номер или телефон
+      const normalizedCalledDid = called_did?.replace(/[^0-9]/g, '')
+      const normalizedTargetPhone = TARGET_PHONE.replace(/[^0-9]/g, '')
+      
+      const isTargetNumber = internal === TARGET_INTERNAL || 
+                            last_internal === TARGET_INTERNAL ||
+                            normalizedCalledDid === normalizedTargetPhone
+      
+      if (!isTargetNumber) {
+        console.log(`[WEBHOOK:NOVOFON] Skipping NOTIFY_END: not for target number (internal: ${internal}, called: ${called_did})`)
+        return NextResponse.json({ 
+          success: true, 
+          action: 'skipped',
+          reason: 'not_target_number'
+        })
+      }
+
+      console.log(`[WEBHOOK:NOVOFON] Processing NOTIFY_END for target number 100`)
       
       // Нормализуем номер клиента
       const clientPhone = caller_id.replace(/\D/g, '')
