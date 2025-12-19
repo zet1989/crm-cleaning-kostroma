@@ -232,6 +232,7 @@ export async function POST(request: NextRequest) {
               column_id: newColumn.id,
               client_name: isMissed ? 'Клиент (пропущенный)' : 'Клиент (входящий звонок)',
               client_phone: clientPhone,
+              address: '',  // Пустой адрес по умолчанию
               source: 'call',
               notes: noteText,
               position: newPosition,
