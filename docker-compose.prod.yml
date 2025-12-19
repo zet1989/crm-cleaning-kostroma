@@ -73,6 +73,13 @@ services:
         condition: service_healthy
       postgrest:
         condition: service_started
+    networks:
+      default:
+        aliases:
+          - next-app
+      supabase-network:
+        aliases:
+          - next-app
 
   # Nginx Reverse Proxy
   nginx:
@@ -98,3 +105,8 @@ volumes:
     driver: local
   certbot_www:
     driver: local
+networks:
+  default:
+  supabase-network:
+    external: true
+    name: crm_supabase-network
