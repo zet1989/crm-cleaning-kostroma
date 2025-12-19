@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`[WEBHOOK:NOVOFON] Processing for target number 100`)
 
-    // Используем service_role для bypass RLS + внутренний URL для прямого доступа к Kong
-    const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL!
+    // Используем service_role для bypass RLS с внешним URL (Kong работает корректно)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     console.log(`[WEBHOOK:NOVOFON] Using Supabase URL: ${supabaseUrl}`)
     
     const supabase = createServerClient(
