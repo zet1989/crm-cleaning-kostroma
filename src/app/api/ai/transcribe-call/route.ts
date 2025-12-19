@@ -33,10 +33,20 @@ export async function POST(request: NextRequest) {
     )
 
     // Получаем настройки AI
-    const { data: aiSettings } = await supabase
+    const { data: aiSettings, error: settingsError } = await supabase
       .from('ai_settings')
       .select('openrouter_api_key, transcription_api_key, transcription_model, selected_model, system_prompt, auto_transcribe_calls')
       .single()
+    
+    if (settingsError) {
+      console.error('[AI:TRANSCRIBE-CALL] Failed to load settings:', settingsError)
+    }
+    
+    console.log('[AI:TRANSCRIBE-CALL] Settings loaded:', {
+      hasTranscriptionKey: !!aiSettings?.transcription_api_key,
+      hasOpenRouterKey: !!aiSettings?.openrouter_api_key,
+      model: aiSettings?.transcription_model
+    })
 
     const apiKey = aiSettings?.transcription_api_key || aiSettings?.openrouter_api_key
     const whisperModel = aiSettings?.transcription_model || 'openai/whisper-large-v3'

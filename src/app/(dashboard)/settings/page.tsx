@@ -48,7 +48,9 @@ interface Settings {
 interface AISettings {
   id?: string
   openrouter_api_key: string
+  transcription_api_key: string
   selected_model: string
+  transcription_model: string
   temperature: number
   auto_process_webhooks: boolean
   auto_transcribe_calls: boolean
@@ -83,6 +85,12 @@ const AI_MODELS = [
   { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B' },
 ]
 
+const WHISPER_MODELS = [
+  { id: 'openai/whisper-large-v3', name: 'Whisper Large V3 (Рекомендуется)' },
+  { id: 'openai/whisper-large-v3-turbo', name: 'Whisper Large V3 Turbo (Быстрая)' },
+  { id: 'openai/whisper-1', name: 'Whisper V1' },
+]
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -91,7 +99,9 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({ executors_percent: 40, managers_percent: 10 })
   const [aiSettings, setAISettings] = useState<AISettings>({
     openrouter_api_key: '',
+    transcription_api_key: '',
     selected_model: 'openai/gpt-4o-mini',
+    transcription_model: 'openai/whisper-large-v3',
     temperature: 0.7,
     auto_process_webhooks: true,
     auto_transcribe_calls: false,
@@ -183,7 +193,9 @@ export default function SettingsPage() {
         setAISettings({
           id: aiData.id,
           openrouter_api_key: aiData.openrouter_api_key || '',
+          transcription_api_key: aiData.transcription_api_key || '',
           selected_model: aiData.selected_model || 'openai/gpt-4o-mini',
+          transcription_model: aiData.transcription_model || 'openai/whisper-large-v3',
           temperature: aiData.temperature || 0.7,
           auto_process_webhooks: aiData.auto_process_webhooks ?? true,
           auto_transcribe_calls: aiData.auto_transcribe_calls ?? false,
@@ -244,7 +256,9 @@ export default function SettingsPage() {
         .upsert({
           id: aiSettings.id || undefined,
           openrouter_api_key: aiSettings.openrouter_api_key,
+          transcription_api_key: aiSettings.transcription_api_key,
           selected_model: aiSettings.selected_model,
+          transcription_model: aiSettings.transcription_model,
           temperature: aiSettings.temperature,
           auto_process_webhooks: aiSettings.auto_process_webhooks,
           auto_transcribe_calls: aiSettings.auto_transcribe_calls,
@@ -735,11 +749,11 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {/* API Key */}
+                {/* API Key for requests processing */}
                 <div className="space-y-2">
                   <Label htmlFor="openrouter_key" className="flex items-center gap-2">
                     <Key className="h-4 w-4" />
-                    OpenRouter API Key
+                    OpenRouter API Key (для обработки заявок)
                   </Label>
                   <div className="flex gap-2">
                     <Input
@@ -759,7 +773,26 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Получить ключ можно на <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">openrouter.ai/keys</a>
+                    Ключ для AI обработки входящих заявок и данных клиентов
+                  </p>
+                </div>
+
+                {/* API Key for transcription */}
+                <div className="space-y-2">
+                  <Label htmlFor="transcription_key" className="flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    OpenRouter API Key (для расшифровки звонков)
+                  </Label>
+                  <Input
+                    id="transcription_key"
+                    type="password"
+                    placeholder="sk-or-v1-..."
+                    value={aiSettings.transcription_api_key}
+                    onChange={(e) => setAISettings({ ...aiSettings, transcription_api_key: e.target.value })}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Отдельный ключ для транскрипции записей звонков через Whisper. Получить на <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">openrouter.ai/keys</a>
                   </p>
                 </div>
 
@@ -786,7 +819,7 @@ export default function SettingsPage() {
 
                 {/* Model Selection */}
                 <div className="space-y-2">
-                  <Label htmlFor="ai_model">Модель AI</Label>
+                  <Label htmlFor="ai_model">Модель AI (для обработки заявок)</Label>
                   <Select
                     value={aiSettings.selected_model}
                     onValueChange={(value) => setAISettings({ ...aiSettings, selected_model: value })}
@@ -804,6 +837,29 @@ export default function SettingsPage() {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     Рекомендуется GPT-4o Mini для баланса скорости и качества
+                  </p>
+                </div>
+
+                {/* Whisper Model Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="whisper_model">Модель Whisper (для расшифровки звонков)</Label>
+                  <Select
+                    value={aiSettings.transcription_model}
+                    onValueChange={(value) => setAISettings({ ...aiSettings, transcription_model: value })}
+                  >
+                    <SelectTrigger id="whisper_model">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {WHISPER_MODELS.map(model => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Whisper Large V3 обеспечивает лучшее качество транскрипции на русском языке
                   </p>
                 </div>
 
