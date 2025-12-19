@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Search, RefreshCw } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Search, RefreshCw, Play, Pause, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Call {
   id: string
@@ -16,6 +17,8 @@ interface Call {
   direction: 'incoming' | 'outgoing'
   duration: number
   recording_url?: string
+  transcript?: string
+  ai_summary?: string
   is_spam: boolean
   deal_id?: string
   created_at: string
@@ -28,6 +31,9 @@ export default function CallsPage() {
   const [calls, setCalls] = useState<Call[]>([])
   const [loading, setLoading] = useState(true)
   const [searchPhone, setSearchPhone] = useState('')
+  const [playingCallId, setPlayingCallId] = useState<string | null>(null)
+  const [expandedCallId, setExpandedCallId] = useState<string | null>(null)
+  const [selectedCall, setSelectedCall] = useState<Call | null>(null)
   
   const supabase = createClient()
 
@@ -46,6 +52,8 @@ export default function CallsPage() {
           direction,
           duration,
           recording_url,
+          transcript,
+          ai_summary,
           is_spam,
           deal_id,
           created_at,
@@ -93,6 +101,10 @@ export default function CallsPage() {
       return <PhoneIncoming className="h-4 w-4 text-blue-500" />
     }
     return <PhoneOutgoing className="h-4 w-4 text-green-500" />
+  }
+
+  const toggleExpand = (callId: string) => {
+    setExpandedCallId(expandedCallId === callId ? null : callId)
   }
 
   const totalCalls = calls.length
@@ -184,42 +196,199 @@ export default function CallsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10"></TableHead>
                   <TableHead>Направление</TableHead>
                   <TableHead>Номер телефона</TableHead>
                   <TableHead>Клиент</TableHead>
                   <TableHead>Длительность</TableHead>
+                  <TableHead>Запись</TableHead>
                   <TableHead>Дата</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredCalls.map(call => (
-                  <TableRow key={call.id} className={call.is_spam ? 'opacity-50' : ''}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getDirectionIcon(call.direction, call.duration)}
-                        <span className="text-sm">
-                          {call.direction === 'incoming' ? 'Входящий' : 'Исходящий'}
-                        </span>
-                        {call.is_spam && (
-                          <Badge variant="destructive" className="text-xs">Спам</Badge>
+                  <>
+                    <TableRow 
+                      key={call.id} 
+                      className={`${call.is_spam ? 'opacity-50' : ''} ${(call.transcript || call.ai_summary) ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+                      onClick={() => (call.transcript || call.ai_summary) && toggleExpand(call.id)}
+                    >
+                      <TableCell>
+                        {(call.transcript || call.ai_summary) && (
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            {expandedCallId === call.id ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono">{call.client_phone}</TableCell>
-                    <TableCell>
-                      {call.deal?.client_name || '—'}
-                    </TableCell>
-                    <TableCell>{formatDuration(call.duration)}</TableCell>
-                    <TableCell>
-                      {new Date(call.created_at).toLocaleString('ru-RU')}
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getDirectionIcon(call.direction, call.duration)}
+                          <span className="text-sm">
+                            {call.direction === 'incoming' ? 'Входящий' : 'Исходящий'}
+                          </span>
+                          {call.is_spam && (
+                            <Badge variant="destructive" className="text-xs">Спам</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono">{call.client_phone}</TableCell>
+                      <TableCell>
+                        {call.deal?.client_name || '—'}
+                      </TableCell>
+                      <TableCell>{formatDuration(call.duration)}</TableCell>
+                      <TableCell>
+                        {call.recording_url ? (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPlayingCallId(playingCallId === call.id ? null : call.id)
+                              }}
+                            >
+                              {playingCallId === call.id ? (
+                                <>
+                                  <Pause className="h-3 w-3 mr-1" />
+                                  Стоп
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="h-3 w-3 mr-1" />
+                                  Слушать
+                                </>
+                              )}
+                            </Button>
+                            {call.transcript && (
+                              <Badge variant="secondary" className="text-xs">
+                                <FileText className="h-3 w-3 mr-1" />
+                                Расшифровка
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(call.created_at).toLocaleString('ru-RU')}
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Expanded row with audio player and transcription */}
+                    {(expandedCallId === call.id || playingCallId === call.id) && (
+                      <TableRow key={`${call.id}-expanded`}>
+                        <TableCell colSpan={7} className="bg-muted/30 p-4">
+                          <div className="space-y-4">
+                            {/* Audio Player */}
+                            {call.recording_url && playingCallId === call.id && (
+                              <div className="flex items-center gap-4">
+                                <span className="text-sm font-medium">Запись звонка:</span>
+                                <audio 
+                                  src={call.recording_url} 
+                                  controls 
+                                  autoPlay
+                                  className="flex-1 h-10"
+                                  onEnded={() => setPlayingCallId(null)}
+                                />
+                              </div>
+                            )}
+                            
+                            {/* Transcript */}
+                            {call.transcript && expandedCallId === call.id && (
+                              <div className="bg-background rounded-lg p-4 border">
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <FileText className="h-4 w-4" />
+                                  Расшифровка разговора
+                                </div>
+                                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                                  {call.transcript}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {/* AI Summary */}
+                            {call.ai_summary && expandedCallId === call.id && (
+                              <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2 text-blue-700 dark:text-blue-300">
+                                  🤖 AI Анализ
+                                </div>
+                                <p className="text-sm text-blue-900 dark:text-blue-100">
+                                  {call.ai_summary}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 ))}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
+
+      {/* Call Details Dialog */}
+      <Dialog open={!!selectedCall} onOpenChange={() => setSelectedCall(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Детали звонка</DialogTitle>
+          </DialogHeader>
+          {selectedCall && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Номер телефона</Label>
+                  <p className="font-mono">{selectedCall.client_phone}</p>
+                </div>
+                <div>
+                  <Label>Направление</Label>
+                  <p>{selectedCall.direction === 'incoming' ? 'Входящий' : 'Исходящий'}</p>
+                </div>
+                <div>
+                  <Label>Длительность</Label>
+                  <p>{formatDuration(selectedCall.duration)}</p>
+                </div>
+                <div>
+                  <Label>Дата</Label>
+                  <p>{new Date(selectedCall.created_at).toLocaleString('ru-RU')}</p>
+                </div>
+              </div>
+              
+              {selectedCall.recording_url && (
+                <div>
+                  <Label>Запись</Label>
+                  <audio src={selectedCall.recording_url} controls className="w-full mt-2" />
+                </div>
+              )}
+              
+              {selectedCall.transcript && (
+                <div>
+                  <Label>Расшифровка</Label>
+                  <div className="bg-muted rounded p-3 mt-2 max-h-64 overflow-y-auto">
+                    <p className="text-sm whitespace-pre-wrap">{selectedCall.transcript}</p>
+                  </div>
+                </div>
+              )}
+              
+              {selectedCall.ai_summary && (
+                <div>
+                  <Label>AI Анализ</Label>
+                  <div className="bg-blue-50 dark:bg-blue-950/20 rounded p-3 mt-2">
+                    <p className="text-sm">{selectedCall.ai_summary}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

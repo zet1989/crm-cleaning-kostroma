@@ -68,6 +68,37 @@ export async function POST(request: NextRequest) {
     if (event === 'NOTIFY_RECORD') {
       console.log(`[WEBHOOK:NOVOFON] Recording ready for call: ${pbx_call_id}`)
       
+      // Получаем URL записи из Novofon API
+      const appId = process.env.NOVOFON_APP_ID
+      const secret = process.env.NOVOFON_SECRET
+      
+      let recordingUrl: string | null = null
+      
+      if (appId && secret && call_id_with_rec) {
+        try {
+          // Формируем подпись для запроса записи
+          const crypto = await import('crypto')
+          const params: Record<string, string> = {
+            appid: appId,
+            call_id: call_id_with_rec
+          }
+          const sortedParams = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&')
+          const sign = crypto.createHash('md5').update(`${sortedParams}${secret}`).digest('hex')
+          
+          const recordResponse = await fetch(
+            `https://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${call_id_with_rec}&sign=${sign}`
+          )
+          
+          if (recordResponse.ok) {
+            const recordData = await recordResponse.json()
+            recordingUrl = recordData.record || recordData.link || null
+            console.log(`[WEBHOOK:NOVOFON] Recording URL: ${recordingUrl}`)
+          }
+        } catch (err) {
+          console.error('[WEBHOOK:NOVOFON] Failed to get recording URL:', err)
+        }
+      }
+      
       // Найти звонок и обновить информацию о записи
       const { data: existingCall } = await supabase
         .from('calls')
@@ -76,9 +107,15 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (existingCall) {
-        // Здесь можно скачать запись через Novofon API
-        // и запустить транскрипцию, если она включена
-        console.log(`[WEBHOOK:NOVOFON] Call found, can process recording`)
+        // Обновляем URL записи в базе
+        if (recordingUrl) {
+          await supabase
+            .from('calls')
+            .update({ recording_url: recordingUrl })
+            .eq('id', existingCall.id)
+          
+          console.log(`[WEBHOOK:NOVOFON] Recording URL saved for call: ${existingCall.id}`)
+        }
         
         const { data: aiSettings } = await supabase
           .from('ai_settings')
@@ -93,13 +130,14 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({ 
               call_id: existingCall.id,
               pbx_call_id: pbx_call_id,
-              call_id_with_rec: call_id_with_rec
+              call_id_with_rec: call_id_with_rec,
+              recording_url: recordingUrl
             })
           }).catch(err => console.error('[WEBHOOK:NOVOFON] Transcription request failed:', err))
         }
       }
 
-      return NextResponse.json({ success: true, action: 'recording_received' })
+      return NextResponse.json({ success: true, action: 'recording_received', recording_url: recordingUrl })
     }
 
     // 3. Обрабатываем завершённые ВХОДЯЩИЕ звонки (NOTIFY_END)
@@ -145,27 +183,29 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
 
-      // Если клиент новый ИЛИ звонок пропущенный - создаём/обновляем лид
-      if (!existingDeal || isMissed) {
-        // Находим колонку "Новые"
-        const { data: newColumn } = await supabase
-          .from('columns')
-          .select('id')
-          .eq('name', 'Новые')
-          .single()
+      // Для любого входящего звонка:
+      // - Новый клиент: создаём сделку в "Новые"
+      // - Повторный клиент: перемещаем сделку в "Новые"
+      
+      // Находим колонку "Новые"
+      const { data: newColumn } = await supabase
+        .from('columns')
+        .select('id')
+        .eq('name', 'Новые')
+        .single()
 
-        if (!newColumn) {
-          throw new Error('Column "Новые" not found')
-        }
+      if (!newColumn) {
+        throw new Error('Column "Новые" not found')
+      }
 
-        // Получаем позицию
-        const { data: maxPositionDeal } = await supabase
-          .from('deals')
-          .select('position')
-          .eq('column_id', newColumn.id)
-          .order('position', { ascending: false })
-          .limit(1)
-          .single()
+      // Получаем позицию
+      const { data: maxPositionDeal } = await supabase
+        .from('deals')
+        .select('position')
+        .eq('column_id', newColumn.id)
+        .order('position', { ascending: false })
+        .limit(1)
+        .single()
 
         const newPosition = (maxPositionDeal?.position ?? -1) + 1
 
@@ -173,7 +213,7 @@ export async function POST(request: NextRequest) {
         const notePrefix = isMissed ? '🔴 ПРОПУЩЕННЫЙ ЗВОНОК' : '📞 Входящий звонок'
         const noteText = `${notePrefix}\nСтатус: ${statusText}\nДлительность: ${duration || 0} сек.\nВнутренний номер: ${internal || 'не указан'}\nВремя: ${new Date().toLocaleString('ru-RU')}`
 
-        // Создаём новую сделку (для новых клиентов) или обновляем существующую (для пропущенных)
+        // Создаём новую сделку (для новых клиентов) или перемещаем существующую в "Новые"
         if (!existingDeal) {
           const { data: newDeal, error } = await supabase
             .from('deals')
@@ -201,40 +241,31 @@ export async function POST(request: NextRequest) {
 
           console.log(`[WEBHOOK:NOVOFON] New lead created: ${newDeal.id} (${isMissed ? 'MISSED' : 'ANSWERED'})`)
           
-          // Если звонок отвечен и есть запись - транскрипция придёт через NOTIFY_RECORD
-          
-        } else {
-          // Для пропущенного звонка от существующего клиента - добавляем примечание
-          const currentNotes = existingDeal.notes || ''
-          await supabase
-            .from('deals')
-            .update({
-              notes: currentNotes + '\n\n' + noteText
-            })
-            .eq('id', existingDeal.id)
-          
-          console.log(`[WEBHOOK:NOVOFON] Missed call added to existing deal: ${existingDeal.id}`)
-        }
-
-        const response = NextResponse.json({
-          success: true,
-          action: existingDeal ? 'call_logged' : 'lead_created',
-          missed: isMissed
-        })
-        response.headers.set('Access-Control-Allow-Origin', '*')
-        return response
       } else {
-        // Клиент существующий, звонок отвечен - только сохраняем звонок
-        console.log(`[WEBHOOK:NOVOFON] Call saved for existing deal: ${existingDeal.id}`)
-
-        const response = NextResponse.json({
-          success: true,
-          action: 'call_saved',
-          deal_id: existingDeal.id
-        })
-        response.headers.set('Access-Control-Allow-Origin', '*')
-        return response
+        // Для повторного клиента - перемещаем сделку в "Новые" и добавляем примечание
+        const currentNotes = existingDeal.notes || ''
+        const repeatNote = `\n\n📞 ПОВТОРНЫЙ ЗВОНОК\n${noteText}`
+        
+        await supabase
+          .from('deals')
+          .update({
+            column_id: newColumn.id,  // Перемещаем в "Новые"
+            position: newPosition,
+            notes: currentNotes + repeatNote,
+            is_repeated_client: true
+          })
+          .eq('id', existingDeal.id)
+        
+        console.log(`[WEBHOOK:NOVOFON] Repeat call - deal moved to "Новые": ${existingDeal.id}`)
       }
+
+      const response = NextResponse.json({
+        success: true,
+        action: existingDeal ? 'deal_moved_to_new' : 'lead_created',
+        missed: isMissed
+      })
+      response.headers.set('Access-Control-Allow-Origin', '*')
+      return response
     }
 
     // 4. Обрабатываем ИСХОДЯЩИЕ звонки (NOTIFY_OUT_END)

@@ -157,10 +157,11 @@ export class NovofonClient {
 export function createNovofonClient(): NovofonClient {
   const appId = process.env.NOVOFON_APP_ID;
   const secret = process.env.NOVOFON_SECRET;
+  const accessToken = process.env.NOVOFON_ACCESS_TOKEN;
 
   if (!appId || !secret) {
     throw new Error('NOVOFON_APP_ID and NOVOFON_SECRET must be set in environment variables');
   }
 
-  return new NovofonClient(appId, secret);
+  return new NovofonClient(accessToken || appId, appId, secret);
 }
