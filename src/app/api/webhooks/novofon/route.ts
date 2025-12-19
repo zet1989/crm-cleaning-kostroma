@@ -9,8 +9,20 @@ import { createClient as createServerClient } from '@supabase/supabase-js'
  */
 export async function POST(request: NextRequest) {
   try {
-    // 1. Парсинг данных от Novofon
-    const body = await request.json()
+    // 1. Парсинг данных от Novofon (поддержка JSON и form-urlencoded)
+    const contentType = request.headers.get('content-type') || ''
+    let body: any
+    
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      // Novofon отправляет данные в формате form-urlencoded
+      const text = await request.text()
+      const params = new URLSearchParams(text)
+      body = Object.fromEntries(params.entries())
+    } else {
+      // Fallback на JSON
+      body = await request.json()
+    }
+    
     const {
       event,                // Тип события: NOTIFY_START, NOTIFY_END, NOTIFY_RECORD
       call_id,              // ID звонка
