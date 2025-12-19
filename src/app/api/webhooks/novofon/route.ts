@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       // Сохраняем информацию о звонке
-      const { data: call } = await supabase
+      const { data: call, error: callInsertError } = await supabase
         .from('calls')
         .insert({
           deal_id: existingDeal?.id || null,
@@ -211,6 +211,12 @@ export async function POST(request: NextRequest) {
         })
         .select()
         .single()
+      
+      if (callInsertError) {
+        console.error('[WEBHOOK:NOVOFON] Failed to insert call:', callInsertError)
+      } else {
+        console.log(`[WEBHOOK:NOVOFON] Call saved with ID: ${call?.id}`)
+      }
 
       // Для любого входящего звонка:
       // - Новый клиент: создаём сделку в "Новые"
@@ -335,7 +341,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       // Сохраняем звонок
-      const { data: call } = await supabase
+      const { data: call, error: callInsertError } = await supabase
         .from('calls')
         .insert({
           deal_id: existingDeal?.id || null,
@@ -347,6 +353,12 @@ export async function POST(request: NextRequest) {
         })
         .select()
         .single()
+      
+      if (callInsertError) {
+        console.error('[WEBHOOK:NOVOFON] Failed to insert outgoing call:', callInsertError)
+      } else {
+        console.log(`[WEBHOOK:NOVOFON] Outgoing call saved with ID: ${call?.id}`)
+      }
 
       if (existingDeal) {
         // Добавляем примечание об исходящем звонке в сделку
