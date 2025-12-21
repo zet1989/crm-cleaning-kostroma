@@ -94,13 +94,31 @@ export async function POST(request: NextRequest) {
       console.log(`[WEBHOOK:NOVOFON] Recording ready for call: ${pbx_call_id}`)
       console.log(`[WEBHOOK:NOVOFON] All NOTIFY_RECORD fields:`, body)
       
-      // Проверяем есть ли URL записи напрямую в вебхуке
-      const recordingUrl = body.record || body.record_url || body.link || body.recording_url || null
+      // Формируем URL записи из call_id_with_rec
+      let recordingUrl = body.record || body.record_url || body.link || body.recording_url || null
       
-      if (recordingUrl) {
+      if (!recordingUrl && call_id_with_rec) {
+        // Novofon хранит записи по паттерну: https://storage.novofon.com/rec/{call_id_with_rec}.mp3
+        recordingUrl = `https://storage.novofon.com/rec/${call_id_with_rec}.mp3`
+        console.log(`[WEBHOOK:NOVOFON] Generated recording URL: ${recordingUrl}`)
+      } else if (recordingUrl) {
         console.log(`[WEBHOOK:NOVOFON] Recording URL from webhook: ${recordingUrl}`)
       } else {
-        console.log(`[WEBHOOK:NOVOFON] No recording URL in webhook, trying API...`)
+        console.log(`[WEBHOOK:NOVOFON] No call_id_with_rec, cannot generate URL`)
+      }
+      
+      // Сохраняем URL записи в базу
+      if (recordingUrl && pbx_call_id) {
+        const { error: updateError } = await supabase
+          .from('calls')
+          .update({ recording_url: recordingUrl })
+          .eq('external_id', pbx_call_id)
+        
+        if (updateError) {
+          console.error(`[WEBHOOK:NOVOFON] Failed to update recording URL:`, updateError)
+        } else {
+          console.log(`[WEBHOOK:NOVOFON] Recording URL saved for call ${pbx_call_id}`)
+        }
       }
 
     // 2a. Обработка события SCENARIO_RECORD (запись через уведомления сценариев)
