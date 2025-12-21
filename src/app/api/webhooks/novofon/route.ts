@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
           const sign = crypto.createHash('md5').update(`${sortedParams}${secret}`).digest('hex')
           
           const recordResponse = await fetch(
-            `https://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${call_id_with_rec}&sign=${sign}`
+            `http://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${call_id_with_rec}&sign=${sign}`
           )
           
           if (recordResponse.ok) {
@@ -337,7 +337,7 @@ export async function POST(request: NextRequest) {
           const sign = crypto.createHash('md5').update(`${sortedParams}${secret}`).digest('hex')
           
           const recordResponse = await fetch(
-            `https://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${callIdWithRec}&sign=${sign}`
+            `http://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${callIdWithRec}&sign=${sign}`
           )
           
           if (recordResponse.ok) {
