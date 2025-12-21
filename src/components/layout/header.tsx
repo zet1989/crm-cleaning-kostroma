@@ -26,7 +26,14 @@ interface HeaderProps {
 export function Header({ profile }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
-  const [soundEnabled, setSoundEnabled] = useState(false)
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('soundEnabled')
+      // По умолчанию включен, если не было явно отключено
+      return saved === null ? true : saved === 'true'
+    }
+    return true
+  })
 
   const handleEnableSound = async () => {
     try {

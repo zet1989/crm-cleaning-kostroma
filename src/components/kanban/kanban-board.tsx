@@ -57,9 +57,11 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null)
   const [soundEnabled, setSoundEnabled] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('soundEnabled') === 'true'
+      const saved = localStorage.getItem('soundEnabled')
+      // По умолчанию включен, если не было явно отключено
+      return saved === null ? true : saved === 'true'
     }
-    return false
+    return true
   })
 
   // Функция для перезагрузки сделок
