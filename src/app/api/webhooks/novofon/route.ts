@@ -22,7 +22,15 @@ export async function POST(request: NextRequest) {
       // Fallback на JSON
       const rawText = await request.text()
       console.log('[WEBHOOK:NOVOFON] Raw body:', rawText)
-      body = JSON.parse(rawText)
+      console.log('[WEBHOOK:NOVOFON] Content-Type:', contentType)
+      try {
+        body = JSON.parse(rawText)
+      } catch (parseError: any) {
+        console.error('[WEBHOOK:NOVOFON] JSON parse error:', parseError.message)
+        console.error('[WEBHOOK:NOVOFON] Position:', parseError.message.match(/position (\d+)/)?.[1])
+        console.error('[WEBHOOK:NOVOFON] Around error:', rawText.substring(Math.max(0, 74-20), 74+20))
+        throw parseError
+      }
     }
     
     const {
