@@ -140,11 +140,11 @@ export async function POST(request: NextRequest) {
     const audioBuffer = await audioFile.arrayBuffer()
     const audioBase64 = Buffer.from(audioBuffer).toString('base64')
     
-    // Используем Gemini 3 Flash через OpenRouter ($1/M audio tokens - очень дёшево)
+    // Используем Gemini через OpenRouter ($1/M audio tokens - очень дёшево)
     const audioModels = [
       'google/gemini-3-flash-preview',  // Новейшая, поддерживает аудио
       'google/gemini-2.0-flash-001',
-      'google/gemini-flash-1.5-8b'
+      'google/gemini-flash-1.5'         // Стабильная версия
     ]
     
     for (const model of audioModels) {
@@ -200,9 +200,9 @@ export async function POST(request: NextRequest) {
           const response = aiData.choices?.[0]?.message?.content || ''
           console.log(`[AI:TRANSCRIBE-CALL] ${model} response (${response.length} chars):`, response.substring(0, 300))
           
-          // Проверяем что это реальная расшифровка
+          // Проверяем что это реальная расшифровка (минимум 10 символов)
           if (response && 
-              response.length > 30 &&
+              response.length > 10 &&
               !response.toLowerCase().includes('не удалось') && 
               !response.toLowerCase().includes('cannot') &&
               !response.toLowerCase().includes('sorry') &&
