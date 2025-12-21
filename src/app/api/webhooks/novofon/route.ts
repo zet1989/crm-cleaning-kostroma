@@ -62,14 +62,24 @@ export async function POST(request: NextRequest) {
     // 2. Обработка события NOTIFY_RECORD (запись звонка готова)
     if (event === 'NOTIFY_RECORD') {
       console.log(`[WEBHOOK:NOVOFON] Recording ready for call: ${pbx_call_id}`)
+      console.log(`[WEBHOOK:NOVOFON] All NOTIFY_RECORD fields:`, body)
       
-      // Получаем URL записи из Novofon API
+      // Проверяем есть ли URL записи напрямую в вебхуке
+      const recordingUrl = body.record || body.record_url || body.link || body.recording_url || null
+      
+      if (recordingUrl) {
+        console.log(`[WEBHOOK:NOVOFON] Recording URL from webhook: ${recordingUrl}`)
+      } else {
+        console.log(`[WEBHOOK:NOVOFON] No recording URL in webhook, trying API...`)
+      }
+      
+      // Получаем URL записи из Novofon API (если не было в вебхуке)
       const appId = process.env.NOVOFON_APP_ID
       const secret = process.env.NOVOFON_SECRET
       
-      let recordingUrl: string | null = null
+      let finalRecordingUrl: string | null = recordingUrl
       
-      if (appId && secret && call_id_with_rec) {
+      if (!finalRecordingUrl && appId && secret && call_id_with_rec) {
         try {
           // Формируем подпись для запроса записи
           const crypto = await import('crypto')
@@ -86,15 +96,17 @@ export async function POST(request: NextRequest) {
           
           if (recordResponse.ok) {
             const recordData = await recordResponse.json()
-            recordingUrl = recordData.record || recordData.link || null
-            console.log(`[WEBHOOK:NOVOFON] Recording URL: ${recordingUrl}`)
+            finalRecordingUrl = recordData.record || recordData.link || null
+            console.log(`[WEBHOOK:NOVOFON] Recording URL from API: ${finalRecordingUrl}`)
+          } else {
+            console.log(`[WEBHOOK:NOVOFON] API request failed: ${recordResponse.status}`)
           }
         } catch (err) {
           console.error('[WEBHOOK:NOVOFON] Failed to get recording URL:', err)
         }
       }
       
-      if (!recordingUrl) {
+      if (!finalRecordingUrl) {
         console.log(`[WEBHOOK:NOVOFON] No recording URL available`)
         return NextResponse.json({ success: true, action: 'no_recording_url' })
       }
@@ -110,13 +122,13 @@ export async function POST(request: NextRequest) {
         // Звонок уже создан - обновляем URL записи
         await supabase
           .from('calls')
-          .update({ recording_url: recordingUrl })
+          .update({ recording_url: finalRecordingUrl })
           .eq('id', existingCall.id)
         
         console.log(`[WEBHOOK:NOVOFON] Recording URL saved for call: ${existingCall.id}`)
         
         // Если есть deal_id, запускаем транскрипцию
-        if (existingCall.deal_id && recordingUrl) {
+        if (existingCall.deal_id && finalRecordingUrl) {
           console.log(`[WEBHOOK:NOVOFON] Starting transcription for call: ${existingCall.id}`)
           
           // Запускаем транскрипцию через OpenRouter
@@ -126,7 +138,7 @@ export async function POST(request: NextRequest) {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 call_id: existingCall.id,
-                recording_url: recordingUrl
+                recording_url: finalRecordingUrl
               })
             })
             
@@ -148,7 +160,7 @@ export async function POST(request: NextRequest) {
         // Для простоты просто логируем - NOTIFY_END создаст звонок после
       }
 
-      return NextResponse.json({ success: true, action: 'recording_received', recording_url: recordingUrl })
+      return NextResponse.json({ success: true, action: 'recording_received', recording_url: finalRecordingUrl })
     }
 
     // 3. Обрабатываем завершённые ВХОДЯЩИЕ звонки (NOTIFY_END)
