@@ -132,150 +132,98 @@ export async function POST(request: NextRequest) {
 
     console.log(`[AI:TRANSCRIBE-CALL] Audio file size: ${audioFile.size} bytes`)
 
-    // Пробуем разные сервисы транскрипции
+    // Транскрибируем через OpenRouter с моделью Gemini (поддерживает аудио)
     let transcription = ''
     let transcriptionError = ''
 
-    // 1. Сначала пробуем Groq (бесплатный и быстрый Whisper)
-    try {
-      console.log('[AI:TRANSCRIBE-CALL] Trying Groq Whisper...')
-      const groqFormData = new FormData()
-      groqFormData.append('file', audioFile)
-      groqFormData.append('model', 'whisper-large-v3')
-      groqFormData.append('language', 'ru')
-
-      const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY || apiKey}`,
-        },
-        body: groqFormData
-      })
-
-      if (groqResponse.ok) {
-        const groqData = await groqResponse.json()
-        transcription = groqData.text || ''
-        console.log('[AI:TRANSCRIBE-CALL] Groq transcription success')
-      } else {
-        transcriptionError = `Groq: ${groqResponse.status}`
-        console.log(`[AI:TRANSCRIBE-CALL] Groq failed: ${groqResponse.status}`)
-      }
-    } catch (err) {
-      transcriptionError = `Groq error: ${err}`
-      console.log('[AI:TRANSCRIBE-CALL] Groq error:', err)
-    }
-
-    // 2. Если Groq не сработал, пробуем OpenAI напрямую
-    if (!transcription && process.env.OPENAI_API_KEY) {
+    // Конвертируем аудио в base64
+    const audioBuffer = await audioFile.arrayBuffer()
+    const audioBase64 = Buffer.from(audioBuffer).toString('base64')
+    
+    // Используем Gemini 3 Flash через OpenRouter ($1/M audio tokens - очень дёшево)
+    const audioModels = [
+      'google/gemini-3-flash-preview',  // Новейшая, поддерживает аудио
+      'google/gemini-2.0-flash-001',
+      'google/gemini-flash-1.5-8b'
+    ]
+    
+    for (const model of audioModels) {
+      if (transcription) break
+      
+      console.log(`[AI:TRANSCRIBE-CALL] Trying model: ${model}`)
+      
       try {
-        console.log('[AI:TRANSCRIBE-CALL] Trying OpenAI Whisper...')
-        const openaiFormData = new FormData()
-        openaiFormData.append('file', audioFile)
-        openaiFormData.append('model', 'whisper-1')
-        openaiFormData.append('language', 'ru')
-
-        const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://crm-kostroma.ru',
+            'X-Title': 'CRM Transcription'
           },
-          body: openaiFormData
-        })
-
-        if (openaiResponse.ok) {
-          const openaiData = await openaiResponse.json()
-          transcription = openaiData.text || ''
-          console.log('[AI:TRANSCRIBE-CALL] OpenAI transcription success')
-        } else {
-          transcriptionError += `, OpenAI: ${openaiResponse.status}`
-          console.log(`[AI:TRANSCRIBE-CALL] OpenAI failed: ${openaiResponse.status}`)
-        }
-      } catch (err) {
-        transcriptionError += `, OpenAI error: ${err}`
-        console.log('[AI:TRANSCRIBE-CALL] OpenAI error:', err)
-      }
-    }
-
-    // 3. Если ничего не сработало - используем AI для "транскрипции" через описание
-    if (!transcription) {
-      console.log('[AI:TRANSCRIBE-CALL] All transcription services failed, trying AI description...')
-      try {
-        // Конвертируем аудио в base64 для отправки в AI
-        const audioBuffer = await audioFile.arrayBuffer()
-        const audioBase64 = Buffer.from(audioBuffer).toString('base64')
-        
-        // Пробуем несколько моделей с поддержкой аудио
-        const audioModels = [
-          'google/gemini-2.0-flash-001',
-          'google/gemini-flash-1.5',
-          'openai/gpt-4o-audio-preview'
-        ]
-        
-        for (const model of audioModels) {
-          if (transcription) break
-          
-          console.log(`[AI:TRANSCRIBE-CALL] Trying model: ${model}`)
-          
-          try {
-            const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://crm-kostroma.ru',
-                'X-Title': 'CRM Transcription'
-              },
-              body: JSON.stringify({
-                model: model,
-                messages: [
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              {
+                role: 'user',
+                content: [
                   {
-                    role: 'user',
-                    content: [
-                      {
-                        type: 'text',
-                        text: `Расшифруй этот телефонный разговор дословно на русском языке. Формат:
-Оператор: [текст]
-Клиент: [текст]
+                    type: 'text',
+                    text: `Расшифруй этот телефонный разговор ДОСЛОВНО на русском языке.
 
-Только дословная расшифровка без анализа и комментариев.`
-                      },
-                      {
-                        type: 'image_url',
-                        image_url: {
-                          url: `data:audio/mpeg;base64,${audioBase64}`
-                        }
-                      }
-                    ]
+ФОРМАТ ОТВЕТА (строго):
+Оператор: [точный текст]
+Клиент: [точный текст]
+
+ВАЖНО:
+- Пиши ТОЛЬКО расшифровку, без анализа и комментариев
+- Если слышно плохо - пиши как слышится
+- Не пропускай слова, даже если они нечёткие
+- Не добавляй ничего от себя`
+                  },
+                  {
+                    type: 'input_audio',
+                    input_audio: {
+                      data: audioBase64,
+                      format: 'mp3'
+                    }
                   }
                 ]
-              })
-            })
-
-            if (aiResponse.ok) {
-              const aiData = await aiResponse.json()
-              const response = aiData.choices?.[0]?.message?.content || ''
-              console.log(`[AI:TRANSCRIBE-CALL] ${model} response:`, response.substring(0, 200))
-              
-              if (response && 
-                  !response.toLowerCase().includes('не удалось') && 
-                  !response.toLowerCase().includes('cannot') &&
-                  !response.toLowerCase().includes('sorry') &&
-                  !response.toLowerCase().includes('unable') &&
-                  response.length > 20) {
-                transcription = response
-                console.log(`[AI:TRANSCRIBE-CALL] ${model} transcription success`)
-                break
               }
-            } else {
-              const errText = await aiResponse.text()
-              console.log(`[AI:TRANSCRIBE-CALL] ${model} error:`, aiResponse.status, errText.substring(0, 200))
-            }
-          } catch (modelErr) {
-            console.log(`[AI:TRANSCRIBE-CALL] ${model} exception:`, modelErr)
+            ],
+            max_tokens: 4000
+          })
+        })
+
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json()
+          const response = aiData.choices?.[0]?.message?.content || ''
+          console.log(`[AI:TRANSCRIBE-CALL] ${model} response (${response.length} chars):`, response.substring(0, 300))
+          
+          // Проверяем что это реальная расшифровка
+          if (response && 
+              response.length > 30 &&
+              !response.toLowerCase().includes('не удалось') && 
+              !response.toLowerCase().includes('cannot') &&
+              !response.toLowerCase().includes('sorry') &&
+              !response.toLowerCase().includes('unable') &&
+              !response.toLowerCase().includes('i cannot') &&
+              !response.toLowerCase().includes('не могу')) {
+            transcription = response
+            console.log(`[AI:TRANSCRIBE-CALL] ${model} transcription SUCCESS`)
+            break
+          } else {
+            console.log(`[AI:TRANSCRIBE-CALL] ${model} - invalid response, trying next...`)
+            transcriptionError += `${model}: invalid response; `
           }
+        } else {
+          const errText = await aiResponse.text()
+          console.log(`[AI:TRANSCRIBE-CALL] ${model} error:`, aiResponse.status, errText.substring(0, 300))
+          transcriptionError += `${model}: ${aiResponse.status}; `
         }
-      } catch (err) {
-        console.log('[AI:TRANSCRIBE-CALL] AI description error:', err)
+      } catch (modelErr) {
+        console.log(`[AI:TRANSCRIBE-CALL] ${model} exception:`, modelErr)
+        transcriptionError += `${model}: exception; `
       }
     }
 
@@ -285,53 +233,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`[AI:TRANSCRIBE-CALL] Transcription complete: ${transcription.substring(0, 100)}...`)
 
-    // Анализируем транскрипцию с AI
-    let aiSummary = ''
-    if (transcription) {
-      try {
-        const analysisResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: aiSettings.selected_model || 'openai/gpt-4o-mini',
-            messages: [
-              {
-                role: 'system',
-                content: `Ты - AI ассистент для CRM. Проанализируй транскрипцию телефонного разговора и выдели:
-1. Краткое содержание (2-3 предложения)
-2. Имя клиента (если упоминается)
-3. Тему обращения
-4. Следующие шаги или договорённости
-Ответ давай на русском языке в структурированном виде.`
-              },
-              {
-                role: 'user',
-                content: `Транскрипция звонка:\n\n${transcription}`
-              }
-            ],
-            max_tokens: 500
-          })
-        })
-
-        if (analysisResponse.ok) {
-          const analysisData = await analysisResponse.json()
-          aiSummary = analysisData.choices?.[0]?.message?.content || ''
-        }
-      } catch (err) {
-        console.error('[AI:TRANSCRIBE-CALL] Analysis failed:', err)
-      }
-    }
-
-    // Сохраняем транскрипцию и анализ в базу
+    // Сохраняем только транскрипцию (без AI анализа - пользователь не хочет)
     await supabase
       .from('calls')
       .update({
         recording_url: audioUrl,
-        transcript: transcription,
-        ai_summary: aiSummary
+        transcript: transcription
       })
       .eq('id', call_id)
 
@@ -340,8 +247,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       call_id,
-      transcription,
-      ai_summary: aiSummary
+      transcription
     })
 
   } catch (error) {
