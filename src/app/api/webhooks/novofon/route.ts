@@ -20,7 +20,9 @@ export async function POST(request: NextRequest) {
       body = Object.fromEntries(params.entries())
     } else {
       // Fallback на JSON
-      body = await request.json()
+      const rawText = await request.text()
+      console.log('[WEBHOOK:NOVOFON] Raw body:', rawText)
+      body = JSON.parse(rawText)
     }
     
     const {
