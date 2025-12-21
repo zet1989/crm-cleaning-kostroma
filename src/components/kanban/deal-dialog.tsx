@@ -545,13 +545,17 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
   const loadClientHistory = useCallback(async (phone: string) => {
     if (!phone || phone.length < 5) return
     
+    // Normalize phone number - remove all non-digits
+    const normalizedPhone = phone.replace(/\D/g, '')
+    if (normalizedPhone.length < 10) return
+    
     setLoadingHistory(true)
     try {
       // Previous orders
       const { data: orders } = await supabase
         .from('deals')
         .select('id, client_name, address, price, scheduled_at, completed_at, created_at, column:columns(name, color)')
-        .eq('client_phone', phone)
+        .eq('client_phone', normalizedPhone)
         .neq('id', deal?.id || '')
         .order('created_at', { ascending: false })
         .limit(10)
@@ -569,7 +573,7 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
       const { data: calls } = await supabase
         .from('calls')
         .select('*')
-        .eq('client_phone', phone)
+        .eq('client_phone', normalizedPhone)
         .order('created_at', { ascending: false })
         .limit(20)
       
