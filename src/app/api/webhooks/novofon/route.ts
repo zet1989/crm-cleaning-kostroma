@@ -74,32 +74,49 @@ export async function POST(request: NextRequest) {
       }
       
       // Получаем URL записи из Novofon API (если не было в вебхуке)
-      const appId = process.env.NOVOFON_APP_ID
+      const userKey = process.env.NOVOFON_APP_ID
       const secret = process.env.NOVOFON_SECRET
       
       let finalRecordingUrl: string | null = recordingUrl
       
-      if (!finalRecordingUrl && appId && secret && call_id_with_rec) {
+      if (!finalRecordingUrl && userKey && secret && call_id_with_rec) {
         try {
-          // Формируем подпись для запроса записи
+          // Формируем подпись для запроса записи согласно документации
+          // https://novofon.com/instructions/api/#block_intro
           const crypto = await import('crypto')
+          const method = '/v1/pbx/record/request/'
           const params: Record<string, string> = {
-            appid: appId,
             call_id: call_id_with_rec
           }
-          const sortedParams = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&')
-          const sign = crypto.createHash('md5').update(`${sortedParams}${secret}`).digest('hex')
+          
+          // Сортируем параметры по алфавиту
+          const sortedKeys = Object.keys(params).sort()
+          const paramsStr = sortedKeys.map(k => `${k}=${params[k]}`).join('&')
+          const md5Hash = crypto.createHash('md5').update(paramsStr).digest('hex')
+          
+          // Формируем строку для подписи: method + paramsStr + md5(paramsStr)
+          const signatureStr = `${method}${paramsStr}${md5Hash}`
+          const signature = crypto.createHmac('sha1', secret).update(signatureStr).digest('base64')
           
           const recordResponse = await fetch(
-            `http://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${call_id_with_rec}&sign=${sign}`
+            `https://api.novofon.com${method}?${paramsStr}`,
+            {
+              headers: {
+                'Authorization': `${userKey}:${signature}`
+              }
+            }
           )
           
           if (recordResponse.ok) {
             const recordData = await recordResponse.json()
-            finalRecordingUrl = recordData.record || recordData.link || null
+            // API v1.0 возвращает {status: 'success', link: '...', lifetime_till: '...'}
+            finalRecordingUrl = recordData.link || null
+            console.log(`[WEBHOOK:NOVOFON] Recording response:`, recordData)
             console.log(`[WEBHOOK:NOVOFON] Recording URL from API: ${finalRecordingUrl}`)
           } else {
-            console.log(`[WEBHOOK:NOVOFON] API request failed: ${recordResponse.status}`)
+            const errorText = await recordResponse.text()
+            console.log(`[WEBHOOK:NOVOFON] API request failed: ${recordResponse.status}, ${errorText}`)
+          }
           }
         } catch (err) {
           console.error('[WEBHOOK:NOVOFON] Failed to get recording URL:', err)
@@ -334,27 +351,40 @@ export async function POST(request: NextRequest) {
       
       // Вспомогательная функция для получения и сохранения записи
       async function fetchAndSaveRecording(callId: string, callIdWithRec: string, dealId: string) {
-        const appId = process.env.NOVOFON_APP_ID
+        const userKey = process.env.NOVOFON_APP_ID
         const secret = process.env.NOVOFON_SECRET
         
-        if (!appId || !secret) return
+        if (!userKey || !secret) return
         
         try {
           const crypto = await import('crypto')
+          const method = '/v1/pbx/record/request/'
           const params: Record<string, string> = {
-            appid: appId,
             call_id: callIdWithRec
           }
-          const sortedParams = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&')
-          const sign = crypto.createHash('md5').update(`${sortedParams}${secret}`).digest('hex')
+          
+          // Сортируем параметры по алфавиту
+          const sortedKeys = Object.keys(params).sort()
+          const paramsStr = sortedKeys.map(k => `${k}=${params[k]}`).join('&')
+          const md5Hash = crypto.createHash('md5').update(paramsStr).digest('hex')
+          
+          // Формируем строку для подписи: method + paramsStr + md5(paramsStr)
+          const signatureStr = `${method}${paramsStr}${md5Hash}`
+          const signature = crypto.createHmac('sha1', secret).update(signatureStr).digest('base64')
           
           const recordResponse = await fetch(
-            `http://dataapi-jsonrpc.novofon.ru/v2.0/statistic/get_record/?appid=${appId}&call_id=${callIdWithRec}&sign=${sign}`
+            `https://api.novofon.com${method}?${paramsStr}`,
+            {
+              headers: {
+                'Authorization': `${userKey}:${signature}`
+              }
+            }
           )
           
           if (recordResponse.ok) {
             const recordData = await recordResponse.json()
-            const recordingUrl = recordData.record || recordData.link || null
+            // API v1.0 возвращает {status: 'success', link: '...', lifetime_till: '...'}
+            const recordingUrl = recordData.link || null
             
             if (recordingUrl) {
               console.log(`[WEBHOOK:NOVOFON] Recording URL obtained: ${recordingUrl}`)
