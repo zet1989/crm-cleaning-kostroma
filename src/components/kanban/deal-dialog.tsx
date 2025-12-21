@@ -600,6 +600,13 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
     }
   }
 
+  // Auto-load client history when switching to history/calls tab
+  useEffect(() => {
+    if ((activeTab === 'history' || activeTab === 'calls') && formData.client_phone) {
+      loadClientHistory(formData.client_phone)
+    }
+  }, [activeTab, formData.client_phone, loadClientHistory])
+
   // Add comment to call
   const addComment = async (callId: string) => {
     const comment = newComment[callId]?.trim()
@@ -849,6 +856,7 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Europe/Moscow'
     })
   }
 
