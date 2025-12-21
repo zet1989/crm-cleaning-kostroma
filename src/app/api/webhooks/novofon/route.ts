@@ -72,6 +72,43 @@ export async function POST(request: NextRequest) {
       } else {
         console.log(`[WEBHOOK:NOVOFON] No recording URL in webhook, trying API...`)
       }
+
+    // 2a. Обработка события SCENARIO_RECORD (запись через уведомления сценариев)
+    } else if (event === 'SCENARIO_RECORD') {
+      const file_url = body.file_url
+      const communication_id = body.pbx_call_id || body.communication_id
+      
+      console.log(`[WEBHOOK:NOVOFON] SCENARIO_RECORD event received:`, {
+        communication_id,
+        file_url,
+        phone: body.phone,
+        duration: body.duration
+      })
+      
+      if (file_url && communication_id) {
+        // Ищем звонок по external_id (pbx_call_id)
+        const { data: call } = await supabase
+          .from('calls')
+          .select('id, deal_id')
+          .eq('external_id', communication_id)
+          .maybeSingle()
+        
+        if (call) {
+          // Обновляем URL записи
+          await supabase
+            .from('calls')
+            .update({ recording_url: file_url })
+            .eq('id', call.id)
+          
+          console.log(`[WEBHOOK:NOVOFON] Recording URL saved for call ${call.id}: ${file_url}`)
+          
+          return NextResponse.json({ success: true, action: 'recording_saved' })
+        } else {
+          console.log(`[WEBHOOK:NOVOFON] Call not found for communication_id: ${communication_id}`)
+        }
+      }
+      
+      return NextResponse.json({ success: true, action: 'scenario_record_processed' })
       
       // Получаем URL записи из Novofon API (если не было в вебхуке)
       const userKey = process.env.NOVOFON_APP_ID
