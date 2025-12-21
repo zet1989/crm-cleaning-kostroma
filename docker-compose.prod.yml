@@ -27,6 +27,7 @@ services:
       NOVOFON_APP_ID: ${NOVOFON_APP_ID}
       NOVOFON_SECRET: ${NOVOFON_SECRET}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
       DATABASE_URL: ${DATABASE_URL}
     networks:
       default:
