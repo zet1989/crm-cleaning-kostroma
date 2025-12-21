@@ -29,15 +29,27 @@ export async function POST(request: NextRequest) {
         body = JSON.parse(rawText)
       } catch (parseError: any) {
         console.error('[WEBHOOK:NOVOFON] JSON parse error:', parseError.message)
-        console.error('[WEBHOOK:NOVOFON] Position:', parseError.message.match(/position (\d+)/)?.[1])
-        console.error('[WEBHOOK:NOVOFON] Around error:', rawText.substring(Math.max(0, 74-20), 74+20))
-        // Возвращаем подробную ошибку клиенту
-        return NextResponse.json({
-          error: 'JSON parse error',
-          message: parseError.message,
-          receivedBody: rawText,
-          contentType: contentType
-        }, { status: 400 })
+        console.error('[WEBHOOK:NOVOFON] Trying to extract data with regex...')
+        
+        // Пытаемся извлечь данные регулярками из невалидного JSON
+        const eventMatch = rawText.match(/"event"\s*:\s*"([^"]+)"/)
+        const commIdMatch = rawText.match(/"communication_id"\s*:\s*"([^"]+)"/)
+        const fileUrlMatch = rawText.match(/"file_url"\s*:\s*"([^"]+)"/)
+        
+        if (eventMatch) {
+          body = {
+            event: eventMatch[1],
+            communication_id: commIdMatch?.[1] || null,
+            file_url: fileUrlMatch?.[1] || null
+          }
+          console.log('[WEBHOOK:NOVOFON] Extracted from malformed JSON:', body)
+        } else {
+          return NextResponse.json({
+            error: 'JSON parse error',
+            message: parseError.message,
+            receivedBody: rawText
+          }, { status: 400 })
+        }
       }
     }
     
