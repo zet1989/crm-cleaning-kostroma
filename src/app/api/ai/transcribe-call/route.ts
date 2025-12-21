@@ -4,12 +4,18 @@ import { createClient as createServerClient } from '@supabase/supabase-js'
 /**
  * Транскрипция звонка из Novofon
  * POST /api/ai/transcribe-call
- * Body: { call_id: string, pbx_call_id?: string, call_id_with_rec?: string, recording_url?: string }
+ * Body: { 
+ *   call_id: string, 
+ *   pbx_call_id?: string, 
+ *   call_id_with_rec?: string, 
+ *   recording_url?: string,
+ *   audio_base64?: string  // Base64 encoded audio file (for client-side download)
+ * }
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { call_id, pbx_call_id, call_id_with_rec, recording_url } = body
+    const { call_id, pbx_call_id, call_id_with_rec, recording_url, audio_base64 } = body
 
     if (!call_id) {
       return NextResponse.json(
@@ -90,24 +96,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!audioUrl) {
-      console.log('[AI:TRANSCRIBE-CALL] No recording URL available')
+    // Если нет ни base64, ни URL - ошибка
+    if (!audio_base64 && !audioUrl) {
+      console.log('[AI:TRANSCRIBE-CALL] No recording URL or audio data available')
       return NextResponse.json(
         { error: 'No recording URL available' },
         { status: 400 }
       )
     }
 
-    console.log(`[AI:TRANSCRIBE-CALL] Transcribing from: ${audioUrl}`)
+    let audioFile: File
 
-    // Скачиваем аудио
-    const audioResponse = await fetch(audioUrl)
-    if (!audioResponse.ok) {
-      throw new Error(`Failed to download audio: ${audioResponse.status}`)
+    // Если передан base64, используем его
+    if (audio_base64) {
+      console.log(`[AI:TRANSCRIBE-CALL] Using provided base64 audio (${audio_base64.length} chars)`)
+      const binaryString = atob(audio_base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      const audioBlob = new Blob([bytes], { type: 'audio/mpeg' })
+      audioFile = new File([audioBlob], 'recording.mp3', { type: 'audio/mpeg' })
+    } else {
+      console.log(`[AI:TRANSCRIBE-CALL] Downloading audio from: ${audioUrl}`)
+      
+      // Скачиваем аудио
+      const audioResponse = await fetch(audioUrl!)
+      if (!audioResponse.ok) {
+        throw new Error(`Failed to download audio: ${audioResponse.status}`)
+      }
+
+      const audioBlob = await audioResponse.blob()
+      audioFile = new File([audioBlob], 'recording.mp3', { type: 'audio/mpeg' })
     }
 
-    const audioBlob = await audioResponse.blob()
-    const audioFile = new File([audioBlob], 'recording.mp3', { type: 'audio/mpeg' })
+    console.log(`[AI:TRANSCRIBE-CALL] Audio file size: ${audioFile.size} bytes`)
 
     // Транскрибируем через OpenRouter Whisper
     const formData = new FormData()

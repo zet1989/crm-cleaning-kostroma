@@ -194,6 +194,9 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
   // AI Processing
   const [processingAI, setProcessingAI] = useState(false)
   
+  // Transcription state
+  const [transcribingCallId, setTranscribingCallId] = useState<string | null>(null)
+  
   // Load managers list
   useEffect(() => {
     const loadManagers = async () => {
@@ -601,6 +604,67 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
     
     if (data) {
       setCallComments(prev => ({ ...prev, [callId]: data }))
+    }
+  }
+
+  // Transcribe call recording
+  const transcribeCall = async (call: Call) => {
+    if (!call.recording_url) {
+      toast.error('Нет записи для транскрипции')
+      return
+    }
+
+    setTranscribingCallId(call.id)
+    try {
+      // Download audio on client side (server may not have access to novofon)
+      toast.info('Загрузка аудио...')
+      const audioResponse = await fetch(call.recording_url)
+      if (!audioResponse.ok) {
+        throw new Error('Не удалось загрузить запись')
+      }
+      
+      const audioBlob = await audioResponse.blob()
+      const reader = new FileReader()
+      
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string
+          // Remove data:audio/mpeg;base64, prefix
+          const base64Data = result.split(',')[1]
+          resolve(base64Data)
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(audioBlob)
+      })
+
+      toast.info('Транскрибирование...')
+      
+      const response = await fetch('/api/ai/transcribe-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          call_id: call.id,
+          audio_base64: base64
+        })
+      })
+
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Ошибка транскрипции')
+      }
+
+      toast.success('Транскрипция завершена!')
+      
+      // Reload calls to show transcript
+      if (formData.client_phone) {
+        loadClientHistory(formData.client_phone)
+      }
+    } catch (error) {
+      console.error('Transcription error:', error)
+      toast.error(error instanceof Error ? error.message : 'Ошибка транскрипции')
+    } finally {
+      setTranscribingCallId(null)
     }
   }
 
@@ -1252,6 +1316,28 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
                               className="h-8 flex-1"
                               onEnded={() => setPlayingCall(null)}
                             />
+                          )}
+                          
+                          {/* Transcribe button */}
+                          {!call.transcript && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => transcribeCall(call)}
+                              disabled={transcribingCallId === call.id}
+                            >
+                              {transcribingCallId === call.id ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Транскрибирование...
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  Транскрибировать
+                                </>
+                              )}
+                            </Button>
                           )}
                         </div>
                       )}
