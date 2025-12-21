@@ -8,9 +8,11 @@ import { createClient as createServerClient } from '@supabase/supabase-js'
  * Документация Novofon API: https://novofon.com/instructions/api/
  */
 export async function POST(request: NextRequest) {
+  console.log('[WEBHOOK:NOVOFON] === NEW REQUEST ===')
   try {
     // 1. Парсинг данных от Novofon (поддержка JSON и form-urlencoded)
     const contentType = request.headers.get('content-type') || ''
+    console.log('[WEBHOOK:NOVOFON] Content-Type header:', contentType)
     let body: any
     
     if (contentType.includes('application/x-www-form-urlencoded')) {
@@ -29,7 +31,13 @@ export async function POST(request: NextRequest) {
         console.error('[WEBHOOK:NOVOFON] JSON parse error:', parseError.message)
         console.error('[WEBHOOK:NOVOFON] Position:', parseError.message.match(/position (\d+)/)?.[1])
         console.error('[WEBHOOK:NOVOFON] Around error:', rawText.substring(Math.max(0, 74-20), 74+20))
-        throw parseError
+        // Возвращаем подробную ошибку клиенту
+        return NextResponse.json({
+          error: 'JSON parse error',
+          message: parseError.message,
+          receivedBody: rawText,
+          contentType: contentType
+        }, { status: 400 })
       }
     }
     
