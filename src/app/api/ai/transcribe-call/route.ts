@@ -204,42 +204,74 @@ export async function POST(request: NextRequest) {
         const audioBuffer = await audioFile.arrayBuffer()
         const audioBase64 = Buffer.from(audioBuffer).toString('base64')
         
-        const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.0-flash-001',
-            messages: [
-              {
-                role: 'user',
-                content: [
+        // Пробуем несколько моделей с поддержкой аудио
+        const audioModels = [
+          'google/gemini-2.0-flash-001',
+          'google/gemini-flash-1.5',
+          'openai/gpt-4o-audio-preview'
+        ]
+        
+        for (const model of audioModels) {
+          if (transcription) break
+          
+          console.log(`[AI:TRANSCRIBE-CALL] Trying model: ${model}`)
+          
+          try {
+            const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://crm-kostroma.ru',
+                'X-Title': 'CRM Transcription'
+              },
+              body: JSON.stringify({
+                model: model,
+                messages: [
                   {
-                    type: 'text',
-                    text: 'Это аудиозапись телефонного разговора. Расшифруй её полностью на русском языке. Укажи кто говорит (оператор/клиент). Если не можешь расшифровать аудио, напиши "Не удалось расшифровать".'
-                  },
-                  {
-                    type: 'input_audio',
-                    input_audio: {
-                      data: audioBase64,
-                      format: 'mp3'
-                    }
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'text',
+                        text: `Расшифруй этот телефонный разговор дословно на русском языке. Формат:
+Оператор: [текст]
+Клиент: [текст]
+
+Только дословная расшифровка без анализа и комментариев.`
+                      },
+                      {
+                        type: 'image_url',
+                        image_url: {
+                          url: `data:audio/mpeg;base64,${audioBase64}`
+                        }
+                      }
+                    ]
                   }
                 ]
-              }
-            ]
-          })
-        })
+              })
+            })
 
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json()
-          transcription = aiData.choices?.[0]?.message?.content || ''
-          if (transcription && !transcription.includes('Не удалось')) {
-            console.log('[AI:TRANSCRIBE-CALL] AI audio description success')
-          } else {
-            transcription = ''
+            if (aiResponse.ok) {
+              const aiData = await aiResponse.json()
+              const response = aiData.choices?.[0]?.message?.content || ''
+              console.log(`[AI:TRANSCRIBE-CALL] ${model} response:`, response.substring(0, 200))
+              
+              if (response && 
+                  !response.toLowerCase().includes('не удалось') && 
+                  !response.toLowerCase().includes('cannot') &&
+                  !response.toLowerCase().includes('sorry') &&
+                  !response.toLowerCase().includes('unable') &&
+                  response.length > 20) {
+                transcription = response
+                console.log(`[AI:TRANSCRIBE-CALL] ${model} transcription success`)
+                break
+              }
+            } else {
+              const errText = await aiResponse.text()
+              console.log(`[AI:TRANSCRIBE-CALL] ${model} error:`, aiResponse.status, errText.substring(0, 200))
+            }
+          } catch (modelErr) {
+            console.log(`[AI:TRANSCRIBE-CALL] ${model} exception:`, modelErr)
           }
         }
       } catch (err) {
