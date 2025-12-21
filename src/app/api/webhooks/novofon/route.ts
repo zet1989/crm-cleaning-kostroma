@@ -98,6 +98,15 @@ export async function POST(request: NextRequest) {
           const signatureStr = `${method}${paramsStr}${md5Hash}`
           const signature = crypto.createHmac('sha1', secret).update(signatureStr).digest('base64')
           
+          console.log(`[WEBHOOK:NOVOFON] API request:`, {
+            method,
+            paramsStr,
+            md5Hash,
+            signatureStr: signatureStr.substring(0, 50) + '...',
+            userKey,
+            signature: signature.substring(0, 20) + '...'
+          })
+          
           const recordResponse = await fetch(
             `https://api.novofon.com${method}?${paramsStr}`,
             {
@@ -370,6 +379,15 @@ export async function POST(request: NextRequest) {
           // Формируем строку для подписи: method + paramsStr + md5(paramsStr)
           const signatureStr = `${method}${paramsStr}${md5Hash}`
           const signature = crypto.createHmac('sha1', secret).update(signatureStr).digest('base64')
+          
+          console.log(`[WEBHOOK:NOVOFON] fetchAndSaveRecording API request:`, {
+            method,
+            paramsStr,
+            md5Hash,
+            signatureStr: signatureStr.substring(0, 50) + '...',
+            userKey,
+            signature: signature.substring(0, 20) + '...'
+          })
           
           const recordResponse = await fetch(
             `https://api.novofon.com${method}?${paramsStr}`,
