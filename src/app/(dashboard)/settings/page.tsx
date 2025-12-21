@@ -85,10 +85,11 @@ const AI_MODELS = [
   { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B' },
 ]
 
-const WHISPER_MODELS = [
-  { id: 'openai/whisper-large-v3', name: 'Whisper Large V3 (Рекомендуется)' },
-  { id: 'openai/whisper-large-v3-turbo', name: 'Whisper Large V3 Turbo (Быстрая)' },
-  { id: 'openai/whisper-1', name: 'Whisper V1' },
+// Модели для транскрипции через OpenRouter (с поддержкой аудио)
+const TRANSCRIPTION_MODELS = [
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash (Рекомендуется, $1/M аудио)' },
+  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
+  { id: 'google/gemini-flash-1.5-8b', name: 'Gemini Flash 1.5 8B (Дешёвая)' },
 ]
 
 export default function SettingsPage() {
@@ -101,7 +102,7 @@ export default function SettingsPage() {
     openrouter_api_key: '',
     transcription_api_key: '',
     selected_model: 'openai/gpt-4o-mini',
-    transcription_model: 'openai/whisper-large-v3',
+    transcription_model: 'google/gemini-3-flash-preview',
     temperature: 0.7,
     auto_process_webhooks: true,
     auto_transcribe_calls: false,
@@ -840,18 +841,18 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                {/* Whisper Model Selection */}
+                {/* Transcription Model Selection */}
                 <div className="space-y-2">
-                  <Label htmlFor="whisper_model">Модель Whisper (для расшифровки звонков)</Label>
+                  <Label htmlFor="transcription_model">Модель для расшифровки звонков</Label>
                   <Select
                     value={aiSettings.transcription_model}
                     onValueChange={(value) => setAISettings({ ...aiSettings, transcription_model: value })}
                   >
-                    <SelectTrigger id="whisper_model">
+                    <SelectTrigger id="transcription_model">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {WHISPER_MODELS.map(model => (
+                      {TRANSCRIPTION_MODELS.map(model => (
                         <SelectItem key={model.id} value={model.id}>
                           {model.name}
                         </SelectItem>
@@ -859,7 +860,7 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Whisper Large V3 обеспечивает лучшее качество транскрипции на русском языке
+                    Gemini 3 Flash через OpenRouter - отличное качество по низкой цене ($1/M аудио токенов)
                   </p>
                 </div>
 
