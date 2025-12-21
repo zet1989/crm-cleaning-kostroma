@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Функция для создания админского клиента
 function getSupabaseAdmin() {
+  // Используем внутренний URL для серверных запросов
+  const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL!
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       auth: {
