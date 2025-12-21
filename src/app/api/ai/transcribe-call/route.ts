@@ -132,27 +132,124 @@ export async function POST(request: NextRequest) {
 
     console.log(`[AI:TRANSCRIBE-CALL] Audio file size: ${audioFile.size} bytes`)
 
-    // Транскрибируем через OpenRouter Whisper
-    const formData = new FormData()
-    formData.append('file', audioFile)
-    formData.append('model', whisperModel)
-    formData.append('language', 'ru')
+    // Пробуем разные сервисы транскрипции
+    let transcription = ''
+    let transcriptionError = ''
 
-    const transcribeResponse = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: formData
-    })
+    // 1. Сначала пробуем Groq (бесплатный и быстрый Whisper)
+    try {
+      console.log('[AI:TRANSCRIBE-CALL] Trying Groq Whisper...')
+      const groqFormData = new FormData()
+      groqFormData.append('file', audioFile)
+      groqFormData.append('model', 'whisper-large-v3')
+      groqFormData.append('language', 'ru')
 
-    if (!transcribeResponse.ok) {
-      const errorText = await transcribeResponse.text()
-      throw new Error(`Transcription failed: ${transcribeResponse.status} - ${errorText}`)
+      const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY || apiKey}`,
+        },
+        body: groqFormData
+      })
+
+      if (groqResponse.ok) {
+        const groqData = await groqResponse.json()
+        transcription = groqData.text || ''
+        console.log('[AI:TRANSCRIBE-CALL] Groq transcription success')
+      } else {
+        transcriptionError = `Groq: ${groqResponse.status}`
+        console.log(`[AI:TRANSCRIBE-CALL] Groq failed: ${groqResponse.status}`)
+      }
+    } catch (err) {
+      transcriptionError = `Groq error: ${err}`
+      console.log('[AI:TRANSCRIBE-CALL] Groq error:', err)
     }
 
-    const transcriptionData = await transcribeResponse.json()
-    const transcription = transcriptionData.text || ''
+    // 2. Если Groq не сработал, пробуем OpenAI напрямую
+    if (!transcription && process.env.OPENAI_API_KEY) {
+      try {
+        console.log('[AI:TRANSCRIBE-CALL] Trying OpenAI Whisper...')
+        const openaiFormData = new FormData()
+        openaiFormData.append('file', audioFile)
+        openaiFormData.append('model', 'whisper-1')
+        openaiFormData.append('language', 'ru')
+
+        const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: openaiFormData
+        })
+
+        if (openaiResponse.ok) {
+          const openaiData = await openaiResponse.json()
+          transcription = openaiData.text || ''
+          console.log('[AI:TRANSCRIBE-CALL] OpenAI transcription success')
+        } else {
+          transcriptionError += `, OpenAI: ${openaiResponse.status}`
+          console.log(`[AI:TRANSCRIBE-CALL] OpenAI failed: ${openaiResponse.status}`)
+        }
+      } catch (err) {
+        transcriptionError += `, OpenAI error: ${err}`
+        console.log('[AI:TRANSCRIBE-CALL] OpenAI error:', err)
+      }
+    }
+
+    // 3. Если ничего не сработало - используем AI для "транскрипции" через описание
+    if (!transcription) {
+      console.log('[AI:TRANSCRIBE-CALL] All transcription services failed, trying AI description...')
+      try {
+        // Конвертируем аудио в base64 для отправки в AI
+        const audioBuffer = await audioFile.arrayBuffer()
+        const audioBase64 = Buffer.from(audioBuffer).toString('base64')
+        
+        const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.0-flash-001',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Это аудиозапись телефонного разговора. Расшифруй её полностью на русском языке. Укажи кто говорит (оператор/клиент). Если не можешь расшифровать аудио, напиши "Не удалось расшифровать".'
+                  },
+                  {
+                    type: 'input_audio',
+                    input_audio: {
+                      data: audioBase64,
+                      format: 'mp3'
+                    }
+                  }
+                ]
+              }
+            ]
+          })
+        })
+
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json()
+          transcription = aiData.choices?.[0]?.message?.content || ''
+          if (transcription && !transcription.includes('Не удалось')) {
+            console.log('[AI:TRANSCRIBE-CALL] AI audio description success')
+          } else {
+            transcription = ''
+          }
+        }
+      } catch (err) {
+        console.log('[AI:TRANSCRIBE-CALL] AI description error:', err)
+      }
+    }
+
+    if (!transcription) {
+      throw new Error(`All transcription methods failed: ${transcriptionError}`)
+    }
 
     console.log(`[AI:TRANSCRIBE-CALL] Transcription complete: ${transcription.substring(0, 100)}...`)
 
