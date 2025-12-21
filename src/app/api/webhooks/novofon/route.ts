@@ -117,7 +117,6 @@ export async function POST(request: NextRequest) {
             const errorText = await recordResponse.text()
             console.log(`[WEBHOOK:NOVOFON] API request failed: ${recordResponse.status}, ${errorText}`)
           }
-          }
         } catch (err) {
           console.error('[WEBHOOK:NOVOFON] Failed to get recording URL:', err)
         }
