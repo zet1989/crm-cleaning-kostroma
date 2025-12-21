@@ -55,7 +55,7 @@ type DealWithRelations = Deal & {
 interface Call {
   id: string
   client_phone: string
-  direction: 'inbound' | 'outbound'
+  direction: 'incoming' | 'outgoing'
   duration: number
   recording_url: string | null
   transcript: string | null
@@ -247,8 +247,39 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
       setClientHistory([])
       setClientCalls([])
       setBonuses([])
+      
+      // Auto-load client history and calls when deal has phone
+      if (deal?.client_phone) {
+        // Async load without blocking
+        (async () => {
+          const phone = deal.client_phone.replace(/\D/g, '')
+          if (phone.length >= 10) {
+            // Load calls
+            const { data: callsData } = await supabase
+              .from('calls')
+              .select('*')
+              .eq('client_phone', phone)
+              .order('created_at', { ascending: false })
+            
+            if (callsData) {
+              setClientCalls(callsData)
+            }
+            
+            // Load other deals from same client
+            const { data: dealsData } = await supabase
+              .from('deals')
+              .select('*')
+              .eq('client_phone', deal.client_phone)
+              .order('created_at', { ascending: false })
+            
+            if (dealsData) {
+              setClientHistory(dealsData)
+            }
+          }
+        })()
+      }
     }
-  }, [open, deal, columnId, columns, managers])
+  }, [open, deal, columnId, columns, managers, supabase])
 
   // Load deal executors with percentages
   const loadDealExecutors = async (dealId: string) => {
@@ -1171,10 +1202,10 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
                         <div className="flex items-center gap-2">
                           <Phone className={cn(
                             "h-4 w-4",
-                            call.direction === 'inbound' ? 'text-green-500' : 'text-blue-500'
+                            call.direction === 'incoming' ? 'text-green-500' : 'text-blue-500'
                           )} />
                           <span className="text-sm font-medium">
-                            {call.direction === 'inbound' ? 'Входящий' : 'Исходящий'}
+                            {call.direction === 'incoming' ? 'Входящий' : 'Исходящий'}
                           </span>
                           {call.is_spam && (
                             <Badge variant="destructive" className="text-xs">Спам</Badge>
