@@ -98,9 +98,13 @@ export async function POST(request: NextRequest) {
       let recordingUrl = body.record || body.record_url || body.link || body.recording_url || null
       
       if (!recordingUrl && call_id_with_rec) {
-        // Novofon хранит записи по паттерну: https://storage.novofon.com/rec/{call_id_with_rec}.mp3
-        recordingUrl = `https://storage.novofon.com/rec/${call_id_with_rec}.mp3`
-        console.log(`[WEBHOOK:NOVOFON] Generated recording URL: ${recordingUrl}`)
+        // Novofon URL: https://my.novofon.ru/system/media/talk/{pbx_call_id}/{hash}/
+        // call_id_with_rec имеет формат: {pbx_call_id}.{hash}
+        const parts = call_id_with_rec.split('.')
+        if (parts.length === 2) {
+          recordingUrl = `https://my.novofon.ru/system/media/talk/${parts[0]}/${parts[1]}/`
+          console.log(`[WEBHOOK:NOVOFON] Generated recording URL: ${recordingUrl}`)
+        }
       } else if (recordingUrl) {
         console.log(`[WEBHOOK:NOVOFON] Recording URL from webhook: ${recordingUrl}`)
       } else {
@@ -123,7 +127,8 @@ export async function POST(request: NextRequest) {
 
     // 2a. Обработка события SCENARIO_RECORD (запись через уведомления сценариев)
     } else if (event === 'SCENARIO_RECORD') {
-      const file_url = body.file_url
+      // Поддерживаем оба варианта: file_url и file_link
+      const file_url = body.file_url || body.file_link
       const communication_id = body.pbx_call_id || body.communication_id
       
       console.log(`[WEBHOOK:NOVOFON] SCENARIO_RECORD event received:`, {
