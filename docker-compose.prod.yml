@@ -1,40 +1,4 @@
 services:
-  # PostgreSQL (Supabase Backend)
-  postgres:
-    image: supabase/postgres:15.1.0.117
-    container_name: crm-postgres
-    restart: always
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your-super-secret-password}
-      POSTGRES_DB: crm
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # PostgREST API
-  postgrest:
-    image: postgrest/postgrest:v12.0.2
-    container_name: crm-postgrest
-    restart: always
-    ports:
-      - "3001:3000"
-    environment:
-      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD:-your-super-secret-password}@postgres:5432/crm
-      PGRST_DB_SCHEMA: public
-      PGRST_DB_ANON_ROLE: postgres
-      PGRST_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters-long
-      PGRST_DB_USE_LEGACY_GUCS: "false"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   # Next.js Application
   next-app:
     build:
@@ -64,16 +28,6 @@ services:
       NOVOFON_SECRET: ${NOVOFON_SECRET}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       DATABASE_URL: ${DATABASE_URL}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: crm
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your-super-secret-password}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      postgrest:
-        condition: service_started
     networks:
       default:
         aliases:
@@ -100,8 +54,6 @@ services:
       - next-app
 
 volumes:
-  postgres_data:
-    driver: local
   nginx_logs:
     driver: local
   certbot_www:
