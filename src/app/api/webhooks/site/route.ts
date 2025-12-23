@@ -54,6 +54,10 @@ export async function POST(request: NextRequest) {
     // 6. Получаем Supabase клиент с service_role (минуя RLS)
     // Используем внутренний URL для обращения из контейнера
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!
+    
+    console.log('[WEBHOOK:SITE] Using Supabase URL:', supabaseUrl)
+    console.log('[WEBHOOK:SITE] Service role key exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+    
     const supabase = createServerClient(
       supabaseUrl,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -66,12 +70,16 @@ export async function POST(request: NextRequest) {
     )
 
     // 7. Находим колонку "Новые"
-    const { data: newColumn } = await supabase
+    const { data: newColumn, error: columnError } = await supabase
       .from('columns')
       .select('id')
       .eq('name', 'Новые')
       .single()
 
+    if (columnError) {
+      console.error('[WEBHOOK:SITE] Column query error:', columnError)
+    }
+    
     if (!newColumn) {
       throw new Error('Column "Новые" not found. Please create it first.')
     }
