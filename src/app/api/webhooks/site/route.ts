@@ -52,8 +52,10 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = phone ? phone.replace(/\D/g, '') : ''
 
     // 6. Получаем Supabase клиент с service_role (минуя RLS)
+    // Используем внутренний URL для обращения из контейнера
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabaseUrl,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
         auth: {
