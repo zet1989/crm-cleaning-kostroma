@@ -389,6 +389,16 @@ export async function POST(request: NextRequest) {
       // Определяем статус звонка
       const isAnswered = disposition === 'answered'
       
+      // Генерируем URL записи если есть call_id_with_rec
+      let recordingUrl: string | null = null
+      if (is_recorded === '1' && call_id_with_rec) {
+        const parts = call_id_with_rec.split('.')
+        if (parts.length === 2) {
+          recordingUrl = `https://my.novofon.ru/system/media/talk/${parts[0]}/${parts[1]}/`
+          console.log(`[WEBHOOK:NOVOFON] Outgoing call recording URL: ${recordingUrl}`)
+        }
+      }
+      
       // Формируем описание статуса
       const statusDescriptions: Record<string, string> = {
         'answered': 'Исходящий звонок (отвечен)',
@@ -416,7 +426,7 @@ export async function POST(request: NextRequest) {
           client_phone: clientPhone,
           direction: 'outgoing',
           duration: duration || 0,
-          recording_url: null,
+          recording_url: recordingUrl,
           external_id: pbx_call_id || call_id
         })
         .select()
@@ -425,7 +435,7 @@ export async function POST(request: NextRequest) {
       if (callInsertError) {
         console.error('[WEBHOOK:NOVOFON] Failed to insert outgoing call:', callInsertError)
       } else {
-        console.log(`[WEBHOOK:NOVOFON] Outgoing call saved with ID: ${call?.id}`)
+        console.log(`[WEBHOOK:NOVOFON] Outgoing call saved with ID: ${call?.id}, recording: ${recordingUrl ? 'yes' : 'no'}`)
       }
 
       if (existingDeal) {
