@@ -22,12 +22,20 @@ export async function POST(request: NextRequest) {
     // 2. Парсинг данных из формы
     const body = await request.json()
     
+    console.log('[WEBHOOK:SITE] Received body:', JSON.stringify(body, null, 2))
+    
     // Принимаем либо структурированные данные, либо сырой текст
     const rawText = body.raw_text || body.message || ''
     const phone = body.phone || ''
     
     // 3. Формируем полный текст заявки для AI обработки
-    const fullText = [
+    // Собираем ВСЕ поля из body, не только известные
+    const allFields = Object.entries(body)
+      .filter(([key, value]) => value && typeof value !== 'object')
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n')
+    
+    const fullText = allFields || [
       body.name ? `Имя: ${body.name}` : '',
       phone ? `Телефон: ${phone}` : '',
       body.email ? `Email: ${body.email}` : '',
@@ -37,6 +45,8 @@ export async function POST(request: NextRequest) {
       body.scheduled_time ? `Время: ${body.scheduled_time}` : '',
       rawText ? `Сообщение: ${rawText}` : body.message || ''
     ].filter(Boolean).join('\n')
+    
+    console.log('[WEBHOOK:SITE] Full text for AI:', fullText)
 
     // 4. Валидация - хотя бы текст или телефон должны быть
     if (!fullText.trim() && !phone) {
