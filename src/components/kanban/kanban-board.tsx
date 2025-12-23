@@ -136,116 +136,89 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
     return rectIntersection(args)
   }
 
-  // Realtime подписка
+  // Polling для получения новых сделок (каждые 5 секунд)
+  // Используем polling вместо Realtime WebSocket, т.к. WebSocket требует сложной настройки Supabase Realtime
+  const [lastDealIds, setLastDealIds] = useState<Set<string>>(new Set(initialDeals.map(d => d.id)))
+  
   useEffect(() => {
-    console.log('[REALTIME] Subscribing to deals-changes channel...')
+    console.log('[POLLING] Starting polling for new deals every 5 seconds...')
     
-    const channel = supabase
-      .channel('deals-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'deals' },
-        async (payload) => {
-          console.log('[REALTIME] Received event:', payload.eventType, payload)
+    const pollForNewDeals = async () => {
+      try {
+        const { data: latestDeals } = await supabase
+          .from('deals')
+          .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
+          .order('position')
+        
+        if (latestDeals) {
+          const currentIds = new Set(latestDeals.map(d => d.id))
+          const previousIds = lastDealIds
           
-          if (payload.eventType === 'INSERT') {
-            console.log('[REALTIME] New deal INSERT event, fetching deal data...')
-            const { data: newDeal } = await supabase
-              .from('deals')
-              .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
-              .eq('id', payload.new.id)
-              .single()
+          // Проверяем новые сделки
+          const newDealIds = [...currentIds].filter(id => !previousIds.has(id))
+          
+          if (newDealIds.length > 0) {
+            console.log('[POLLING] Found new deals:', newDealIds)
             
-            console.log('[REALTIME] Fetched new deal:', newDeal)
+            // Обновляем состояние сделок
+            setDeals(latestDeals)
+            setLastDealIds(currentIds)
             
-            if (newDeal) {
-              // Загружаем всех исполнителей и менеджеров для новой сделки
-              const [dealExecutorsResult, dealManagersResult] = await Promise.all([
-                supabase.from('deal_executors').select('executor:executors(*)').eq('deal_id', newDeal.id),
-                supabase.from('deal_managers').select('manager:profiles!deal_managers_manager_id_fkey(*)').eq('deal_id', newDeal.id)
-              ])
-              
-              const dealWithExecutors = {
-                ...newDeal,
-                executors: dealExecutorsResult.data?.map(de => de.executor).filter(Boolean) || [],
-                managers: dealManagersResult.data?.map(dm => dm.manager).filter(Boolean) || []
-              }
-              
-              console.log('[REALTIME] Adding deal to state:', dealWithExecutors)
-              setDeals(prev => [...prev, dealWithExecutors])
-              
-              // Уведомление и звук для новой заявки
-              console.log('[REALTIME] Showing notification...')
-              toast.success('🔔 Новая заявка!', {
-                description: `${newDeal.client_name} - ${newDeal.client_phone}`,
-                duration: 5000,
-              })
-              
-              // Звуковой сигнал (только если включен)
-              console.log('[REALTIME] Sound enabled:', soundEnabled)
-              if (soundEnabled) {
-                try {
-                  console.log('[REALTIME] Playing sound...')
-                  // Используем Web Audio API для генерации звука
-                  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-                  const oscillator = audioContext.createOscillator()
-                  const gainNode = audioContext.createGain()
-                  
-                  oscillator.connect(gainNode)
-                  gainNode.connect(audioContext.destination)
-                  
-                  oscillator.frequency.value = 800
-                  oscillator.type = 'sine'
-                  
-                  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-                  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
-                  
-                  oscillator.start(audioContext.currentTime)
-                  oscillator.stop(audioContext.currentTime + 0.5)
-                  console.log('[REALTIME] Sound played')
-                } catch (err) {
-                  console.error('[REALTIME] Audio play failed:', err)
+            // Для каждой новой сделки показываем уведомление и звук
+            for (const newDealId of newDealIds) {
+              const newDeal = latestDeals.find(d => d.id === newDealId)
+              if (newDeal) {
+                // Уведомление
+                toast.success('🔔 Новая заявка!', {
+                  description: `${newDeal.client_name || 'Без имени'} - ${newDeal.client_phone || 'Без телефона'}`,
+                  duration: 5000,
+                })
+                
+                // Звуковой сигнал (только если включен)
+                if (soundEnabled) {
+                  try {
+                    console.log('[POLLING] Playing notification sound...')
+                    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+                    const oscillator = audioContext.createOscillator()
+                    const gainNode = audioContext.createGain()
+                    
+                    oscillator.connect(gainNode)
+                    gainNode.connect(audioContext.destination)
+                    
+                    oscillator.frequency.value = 800
+                    oscillator.type = 'sine'
+                    
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
+                    
+                    oscillator.start(audioContext.currentTime)
+                    oscillator.stop(audioContext.currentTime + 0.5)
+                    console.log('[POLLING] Sound played')
+                  } catch (err) {
+                    console.error('[POLLING] Audio play failed:', err)
+                  }
                 }
               }
             }
-          } else if (payload.eventType === 'UPDATE') {
-            console.log('[REALTIME] Deal UPDATE event')
-            const { data: updatedDeal } = await supabase
-              .from('deals')
-              .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
-              .eq('id', payload.new.id)
-              .single()
-            
-            if (updatedDeal) {
-              // Загружаем всех исполнителей и менеджеров
-              const [dealExecutorsResult, dealManagersResult] = await Promise.all([
-                supabase.from('deal_executors').select('executor:executors(*)').eq('deal_id', updatedDeal.id),
-                supabase.from('deal_managers').select('manager:profiles!deal_managers_manager_id_fkey(*)').eq('deal_id', updatedDeal.id)
-              ])
-              
-              const dealWithExecutors = {
-                ...updatedDeal,
-                executors: dealExecutorsResult.data?.map(de => de.executor).filter(Boolean) || [],
-                managers: dealManagersResult.data?.map(dm => dm.manager).filter(Boolean) || []
-              }
-              
-              setDeals(prev => prev.map(d => d.id === dealWithExecutors.id ? dealWithExecutors : d))
-            }
-          } else if (payload.eventType === 'DELETE') {
-            console.log('[REALTIME] Deal DELETE event')
-            setDeals(prev => prev.filter(d => d.id !== payload.old.id))
+          } else {
+            // Просто обновляем данные сделок (могли измениться позиции и т.д.)
+            setDeals(latestDeals)
+            setLastDealIds(currentIds)
           }
         }
-      )
-      .subscribe((status) => {
-        console.log('[REALTIME] Subscription status:', status)
-      })
-
-    return () => {
-      console.log('[REALTIME] Unsubscribing from channel')
-      supabase.removeChannel(channel)
+      } catch (err) {
+        console.error('[POLLING] Error polling deals:', err)
+      }
     }
-  }, [supabase, soundEnabled])
+    
+    // Запускаем polling каждые 5 секунд
+    const intervalId = setInterval(pollForNewDeals, 5000)
+    
+    return () => {
+      console.log('[POLLING] Stopping polling')
+      clearInterval(intervalId)
+    }
+  }, [supabase, soundEnabled, lastDealIds])
 
   const activeDeal = activeId ? deals.find(d => d.id === activeId) : null
 
