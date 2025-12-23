@@ -150,8 +150,21 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
               .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
               .eq('id', payload.new.id)
               .single()
+            
             if (newDeal) {
-              setDeals(prev => [...prev, newDeal])
+              // Загружаем всех исполнителей и менеджеров для новой сделки
+              const [dealExecutorsResult, dealManagersResult] = await Promise.all([
+                supabase.from('deal_executors').select('executor:executors(*)').eq('deal_id', newDeal.id),
+                supabase.from('deal_managers').select('manager:profiles!deal_managers_manager_id_fkey(*)').eq('deal_id', newDeal.id)
+              ])
+              
+              const dealWithExecutors = {
+                ...newDeal,
+                executors: dealExecutorsResult.data?.map(de => de.executor).filter(Boolean) || [],
+                managers: dealManagersResult.data?.map(dm => dm.manager).filter(Boolean) || []
+              }
+              
+              setDeals(prev => [...prev, dealWithExecutors])
               
               // Уведомление и звук для новой заявки
               toast.success('🔔 Новая заявка!', {
@@ -162,11 +175,24 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
               // Звуковой сигнал (только если включен)
               if (soundEnabled) {
                 try {
-                  const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZSA0PVqzn77BdGAg+ltryxnMnBSuAy/Hfljwp')
-                  audio.volume = 0.7
-                  audio.play().catch(err => console.log('Audio play failed:', err))
+                  // Используем Web Audio API для генерации звука
+                  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+                  const oscillator = audioContext.createOscillator()
+                  const gainNode = audioContext.createGain()
+                  
+                  oscillator.connect(gainNode)
+                  gainNode.connect(audioContext.destination)
+                  
+                  oscillator.frequency.value = 800
+                  oscillator.type = 'sine'
+                  
+                  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+                  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
+                  
+                  oscillator.start(audioContext.currentTime)
+                  oscillator.stop(audioContext.currentTime + 0.5)
                 } catch (err) {
-                  console.log('Audio creation failed:', err)
+                  console.log('Audio play failed:', err)
                 }
               }
             }
@@ -176,8 +202,21 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
               .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
               .eq('id', payload.new.id)
               .single()
+            
             if (updatedDeal) {
-              setDeals(prev => prev.map(d => d.id === updatedDeal.id ? updatedDeal : d))
+              // Загружаем всех исполнителей и менеджеров
+              const [dealExecutorsResult, dealManagersResult] = await Promise.all([
+                supabase.from('deal_executors').select('executor:executors(*)').eq('deal_id', updatedDeal.id),
+                supabase.from('deal_managers').select('manager:profiles!deal_managers_manager_id_fkey(*)').eq('deal_id', updatedDeal.id)
+              ])
+              
+              const dealWithExecutors = {
+                ...updatedDeal,
+                executors: dealExecutorsResult.data?.map(de => de.executor).filter(Boolean) || [],
+                managers: dealManagersResult.data?.map(dm => dm.manager).filter(Boolean) || []
+              }
+              
+              setDeals(prev => prev.map(d => d.id === dealWithExecutors.id ? dealWithExecutors : d))
             }
           } else if (payload.eventType === 'DELETE') {
             setDeals(prev => prev.filter(d => d.id !== payload.old.id))
