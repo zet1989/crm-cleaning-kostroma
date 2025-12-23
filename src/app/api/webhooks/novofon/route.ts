@@ -333,86 +333,41 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Вспомогательная функция для получения и сохранения записи
+      // Вспомогательная функция для сохранения URL записи
+      // call_id_with_rec формат: {pbx_call_id}.{hash}
+      // URL: https://my.novofon.ru/system/media/talk/{pbx_call_id}/{hash}/
       async function fetchAndSaveRecording(callId: string, callIdWithRec: string, dealId: string) {
-        const userKey = process.env.NOVOFON_APP_ID
-        const secret = process.env.NOVOFON_SECRET
-        
-        if (!userKey || !secret) return
-        
         try {
-          const crypto = await import('crypto')
-          const method = '/v1/pbx/record/request/'
-          const params: Record<string, string> = {
-            call_id: callIdWithRec
+          // Парсим call_id_with_rec чтобы получить pbx_call_id и hash
+          const parts = callIdWithRec.split('.')
+          if (parts.length !== 2) {
+            console.error(`[WEBHOOK:NOVOFON] Invalid call_id_with_rec format: ${callIdWithRec}`)
+            return
           }
           
-          // Сортируем параметры по алфавиту
-          const sortedKeys = Object.keys(params).sort()
-          const paramsStr = sortedKeys.map(k => `${k}=${params[k]}`).join('&')
-          const md5Hash = crypto.createHash('md5').update(paramsStr).digest('hex')
+          const pbxCallId = parts[0]
+          const hash = parts[1]
+          const recordingUrl = `https://my.novofon.ru/system/media/talk/${pbxCallId}/${hash}/`
           
-          // Формируем строку для подписи: method + paramsStr + md5(paramsStr)
-          const signatureStr = `${method}${paramsStr}${md5Hash}`
-          const signature = crypto.createHmac('sha1', secret).update(signatureStr).digest('base64')
+          console.log(`[WEBHOOK:NOVOFON] Recording URL generated: ${recordingUrl}`)
           
-          console.log(`[WEBHOOK:NOVOFON] fetchAndSaveRecording API request:`, {
-            method,
-            paramsStr,
-            md5Hash,
-            signatureStr: signatureStr.substring(0, 50) + '...',
-            userKey,
-            signature: signature.substring(0, 20) + '...'
-          })
-          
-          const recordResponse = await fetch(
-            `https://api.novofon.com${method}?${paramsStr}`,
-            {
-              headers: {
-                'Authorization': `${userKey}:${signature}`
-              }
-            }
-          )
-          
-          if (recordResponse.ok) {
-            const recordData = await recordResponse.json()
-            // API v1.0 возвращает {status: 'success', link: '...', lifetime_till: '...'}
-            const recordingUrl = recordData.link || null
+          // Сохраняем URL записи
+          const { error } = await supabase
+            .from('calls')
+            .update({ recording_url: recordingUrl })
+            .eq('id', callId)
             
-            if (recordingUrl) {
-              console.log(`[WEBHOOK:NOVOFON] Recording URL obtained: ${recordingUrl}`)
-              
-              // Сохраняем URL записи
-              await supabase
-                .from('calls')
-                .update({ recording_url: recordingUrl })
-                .eq('id', callId)
-              
-              // Запускаем транскрипцию
-              console.log(`[WEBHOOK:NOVOFON] Starting transcription...`)
-              try {
-                const transcribeResponse = await fetch(`${supabaseUrl.replace('/rest/v1', '')}/api/ai/transcribe-call`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    call_id: callId,
-                    recording_url: recordingUrl
-                  })
-                })
-                
-                if (transcribeResponse.ok) {
-                  console.log(`[WEBHOOK:NOVOFON] Transcription started successfully`)
-                } else {
-                  const errorText = await transcribeResponse.text()
-                  console.error(`[WEBHOOK:NOVOFON] Transcription failed:`, errorText)
-                }
-              } catch (err) {
-                console.error('[WEBHOOK:NOVOFON] Transcription request failed:', err)
-              }
-            }
+          if (error) {
+            console.error(`[WEBHOOK:NOVOFON] Failed to save recording URL:`, error)
+          } else {
+            console.log(`[WEBHOOK:NOVOFON] Recording URL saved successfully`)
           }
+          
+          // Транскрипцию делаем на клиенте (сервер не может достучаться до Novofon)
+          // Пользователь нажмёт кнопку "Транскрибировать" в интерфейсе
+          
         } catch (err) {
-          console.error('[WEBHOOK:NOVOFON] Failed to fetch recording:', err)
+          console.error('[WEBHOOK:NOVOFON] Failed to save recording URL:', err)
         }
       }
 
