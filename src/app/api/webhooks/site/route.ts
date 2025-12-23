@@ -28,11 +28,34 @@ export async function POST(request: NextRequest) {
     const rawText = body.raw_text || body.message || ''
     const phone = body.phone || ''
     
+    // Словарь для русификации английских полей
+    const fieldTranslations: Record<string, string> = {
+      'name': 'Имя',
+      'phone': 'Телефон',
+      'email': 'Email',
+      'message': 'Сообщение',
+      'source': 'Источник',
+      'timestamp': 'Время заявки',
+      'page_url': 'Страница',
+      'site_url': 'Сайт',
+      'site_name': 'Название сайта',
+      'client_ip': 'IP адрес',
+      'user_agent': 'Браузер',
+      'calculator_title': 'Калькулятор',
+      'total_price': 'Стоимость',
+      'discount': 'Скидка',
+      'final_price': 'Итого к оплате',
+      'test_field': 'Тестовое поле'
+    }
+    
     // 3. Формируем полный текст заявки для AI обработки
-    // Собираем ВСЕ поля из body, не только известные
+    // Собираем ВСЕ поля из body с переводом названий
     const allFields = Object.entries(body)
       .filter(([key, value]) => value && typeof value !== 'object')
-      .map(([key, value]) => `${key}: ${value}`)
+      .map(([key, value]) => {
+        const translatedKey = fieldTranslations[key] || key
+        return `${translatedKey}: ${value}`
+      })
       .join('\n')
     
     const fullText = allFields || [
