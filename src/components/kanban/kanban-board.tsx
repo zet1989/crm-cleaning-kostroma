@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -63,6 +63,58 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
     }
     return true
   })
+  
+  // Глобальный AudioContext для звуковых уведомлений
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null)
+  
+  // Функция для воспроизведения звука уведомления
+  const playNotificationSound = () => {
+    if (!soundEnabled) return
+    
+    try {
+      // Создаём новый AudioContext если нет или он закрыт
+      let ctx = audioContext
+      if (!ctx || ctx.state === 'closed') {
+        ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        setAudioContext(ctx)
+      }
+      
+      // Возобновляем контекст если он в suspended состоянии
+      if (ctx.state === 'suspended') {
+        ctx.resume()
+      }
+      
+      const oscillator = ctx.createOscillator()
+      const gainNode = ctx.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(ctx.destination)
+      
+      oscillator.frequency.value = 800
+      oscillator.type = 'sine'
+      
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
+      
+      oscillator.start(ctx.currentTime)
+      oscillator.stop(ctx.currentTime + 0.5)
+      console.log('[SOUND] Notification sound played')
+    } catch (err) {
+      console.error('[SOUND] Audio play failed:', err)
+    }
+  }
+  
+  // Активируем AudioContext при клике на кнопку звука
+  const toggleSound = () => {
+    const newValue = !soundEnabled
+    setSoundEnabled(newValue)
+    localStorage.setItem('soundEnabled', String(newValue))
+    
+    // Если включаем звук - проигрываем тестовый звук и активируем AudioContext
+    if (newValue) {
+      playNotificationSound()
+    }
+  }
 
   // Функция для перезагрузки сделок
   const refreshDeals = async () => {
@@ -138,7 +190,7 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
 
   // Polling для получения новых сделок (каждые 5 секунд)
   // Используем polling вместо Realtime WebSocket, т.к. WebSocket требует сложной настройки Supabase Realtime
-  const [lastDealIds, setLastDealIds] = useState<Set<string>>(new Set(initialDeals.map(d => d.id)))
+  const lastDealIdsRef = React.useRef<Set<string>>(new Set(initialDeals.map(d => d.id)))
   
   useEffect(() => {
     console.log('[POLLING] Starting polling for new deals every 5 seconds...')
@@ -152,7 +204,7 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
         
         if (latestDeals) {
           const currentIds = new Set(latestDeals.map(d => d.id))
-          const previousIds = lastDealIds
+          const previousIds = lastDealIdsRef.current
           
           // Проверяем новые сделки
           const newDealIds = [...currentIds].filter(id => !previousIds.has(id))
@@ -160,9 +212,11 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
           if (newDealIds.length > 0) {
             console.log('[POLLING] Found new deals:', newDealIds)
             
+            // Обновляем ref
+            lastDealIdsRef.current = currentIds
+            
             // Обновляем состояние сделок
             setDeals(latestDeals)
-            setLastDealIds(currentIds)
             
             // Для каждой новой сделки показываем уведомление и звук
             for (const newDealId of newDealIds) {
@@ -174,36 +228,14 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
                   duration: 5000,
                 })
                 
-                // Звуковой сигнал (только если включен)
-                if (soundEnabled) {
-                  try {
-                    console.log('[POLLING] Playing notification sound...')
-                    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-                    const oscillator = audioContext.createOscillator()
-                    const gainNode = audioContext.createGain()
-                    
-                    oscillator.connect(gainNode)
-                    gainNode.connect(audioContext.destination)
-                    
-                    oscillator.frequency.value = 800
-                    oscillator.type = 'sine'
-                    
-                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
-                    
-                    oscillator.start(audioContext.currentTime)
-                    oscillator.stop(audioContext.currentTime + 0.5)
-                    console.log('[POLLING] Sound played')
-                  } catch (err) {
-                    console.error('[POLLING] Audio play failed:', err)
-                  }
-                }
+                // Звуковой сигнал
+                playNotificationSound()
               }
             }
           } else {
             // Просто обновляем данные сделок (могли измениться позиции и т.д.)
+            lastDealIdsRef.current = currentIds
             setDeals(latestDeals)
-            setLastDealIds(currentIds)
           }
         }
       } catch (err) {
@@ -218,7 +250,7 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
       console.log('[POLLING] Stopping polling')
       clearInterval(intervalId)
     }
-  }, [supabase, soundEnabled, lastDealIds])
+  }, [supabase])
 
   const activeDeal = activeId ? deals.find(d => d.id === activeId) : null
 
@@ -413,6 +445,18 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
+      {/* Кнопка включения/выключения звука */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <Button
+          variant={soundEnabled ? "default" : "outline"}
+          size="icon"
+          onClick={toggleSound}
+          title={soundEnabled ? "Звук включен (нажмите чтобы выключить)" : "Звук выключен (нажмите чтобы включить)"}
+        >
+          {soundEnabled ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+        </Button>
+      </div>
+      
       <div className="flex-1 overflow-x-auto p-6">
         <div className="flex gap-4 h-full min-w-max">
           <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
