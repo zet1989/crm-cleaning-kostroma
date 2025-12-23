@@ -556,34 +556,24 @@ export default function SettingsPage() {
                       📞 Novofon (телефония)
                     </h4>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Автоматическое создание заявок из входящих звонков через polling
+                      Автоматическое создание заявок из входящих и исходящих звонков
                     </p>
                   </div>
-                  <Badge variant="outline" className="bg-green-50 text-green-700">Polling</Badge>
+                  <Badge variant="outline" className="bg-green-50 text-green-700">Webhooks</Badge>
                 </div>
                 <div className="space-y-3">
-                  <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded text-xs space-y-2">
-                    <p className="font-medium">✅ Работает на localhost без публичного URL!</p>
+                  <div className="bg-green-50 dark:bg-green-950 p-3 rounded text-xs space-y-2">
+                    <p className="font-medium">✅ Webhooks активны - звонки обрабатываются мгновенно!</p>
                     <p className="text-muted-foreground">
-                      Используется polling (опрос API каждые 2 минуты) вместо webhooks
+                      Входящие и исходящие звонки автоматически создают сделки с записями разговоров
                     </p>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium">Статус поллера:</Label>
-                    <div className="flex items-center justify-between p-3 bg-muted rounded">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                        <span className="text-sm">Для запуска используйте команду ниже</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium">Запуск поллера:</Label>
+                    <Label className="text-xs font-medium">Webhook URL для Novofon:</Label>
                     <div className="flex gap-2">
                       <Input
-                        value="npx tsx src/scripts/start-novofon-poller.ts"
+                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/novofon`}
                         readOnly
                         className="font-mono text-xs"
                       />
@@ -591,13 +581,14 @@ export default function SettingsPage() {
                         variant="outline"
                         size="icon"
                         onClick={() => {
-                          navigator.clipboard.writeText('npx tsx src/scripts/start-novofon-poller.ts')
-                          setCopiedWebhook('novofon-cmd')
-                          toast.success('Команда скопирована')
+                          const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/novofon`
+                          navigator.clipboard.writeText(url)
+                          setCopiedWebhook('novofon-webhook')
+                          toast.success('URL скопирован')
                           setTimeout(() => setCopiedWebhook(''), 2000)
                         }}
                       >
-                        {copiedWebhook === 'novofon-cmd' ? (
+                        {copiedWebhook === 'novofon-webhook' ? (
                           <CheckCircle2 className="h-4 w-4 text-green-600" />
                         ) : (
                           <Copy className="h-4 w-4" />
@@ -607,21 +598,28 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground font-medium">Настройка (.env.local):</p>
+                    <p className="text-xs text-muted-foreground font-medium">Настройка webhooks в Novofon:</p>
                     <ol className="text-xs text-muted-foreground space-y-1 ml-4 list-decimal">
-                      <li>Заполните <code className="bg-muted px-1 rounded">NOVOFON_APP_ID</code> и <code className="bg-muted px-1 rounded">NOVOFON_SECRET</code></li>
-                      <li>Укажите внутренние номера в <code className="bg-muted px-1 rounded">NOVOFON_INTERNALS</code> (например: 100,101,102)</li>
-                      <li>Привяжите внутренние номера к менеджерам в БД</li>
-                      <li>Запустите поллер командой выше</li>
+                      <li>В личном кабинете Novofon → Сценарии → создайте сценарий для входящих/исходящих</li>
+                      <li>Добавьте действие <code className="bg-muted px-1 rounded">HTTP уведомление</code></li>
+                      <li>URL: <code className="bg-muted px-1 rounded">https://crm-kostroma.ru/api/webhooks/novofon</code></li>
+                      <li>Метод: POST, тип события: <code className="bg-muted px-1 rounded">NOTIFY_END</code> (входящие) и <code className="bg-muted px-1 rounded">NOTIFY_OUT_END</code> (исходящие)</li>
+                      <li>Для записей: добавьте событие <code className="bg-muted px-1 rounded">SCENARIO_RECORD</code> с параметрами <code className="bg-muted px-1 rounded">communication_id</code> и <code className="bg-muted px-1 rounded">file_url</code></li>
                     </ol>
-                    <p className="text-xs text-primary hover:underline cursor-pointer mt-2" onClick={() => window.open('/TEST-NOVOFON.md', '_blank')}>
-                      📖 Подробная инструкция по настройке →
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded text-xs">
+                    <p className="font-medium mb-1">🎙️ Транскрипция звонков:</p>
+                    <p className="text-muted-foreground">
+                      Записи автоматически транскрибируются через Gemini. Для прослушивания нажмите кнопку "Прослушать" в карточке сделки
                     </p>
                   </div>
 
                   <div className="bg-amber-50 dark:bg-amber-950 p-3 rounded text-xs">
-                    <p className="font-medium mb-1">⏱️ Задержка обработки:</p>
-                    <p className="text-muted-foreground">Звонки обрабатываются с задержкой 2-5 минут (время опроса API)</p>
+                    <p className="font-medium mb-1">⚙️ Настройки (.env):</p>
+                    <p className="text-muted-foreground">
+                      Убедитесь что заполнены: <code className="bg-muted px-1 rounded">NOVOFON_APP_ID</code>, <code className="bg-muted px-1 rounded">NOVOFON_SECRET</code>
+                    </p>
                   </div>
                 </div>
               </div>
