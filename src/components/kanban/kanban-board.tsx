@@ -138,18 +138,25 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
 
   // Realtime подписка
   useEffect(() => {
+    console.log('[REALTIME] Subscribing to deals-changes channel...')
+    
     const channel = supabase
       .channel('deals-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'deals' },
         async (payload) => {
+          console.log('[REALTIME] Received event:', payload.eventType, payload)
+          
           if (payload.eventType === 'INSERT') {
+            console.log('[REALTIME] New deal INSERT event, fetching deal data...')
             const { data: newDeal } = await supabase
               .from('deals')
               .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
               .eq('id', payload.new.id)
               .single()
+            
+            console.log('[REALTIME] Fetched new deal:', newDeal)
             
             if (newDeal) {
               // Загружаем всех исполнителей и менеджеров для новой сделки
@@ -164,17 +171,21 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
                 managers: dealManagersResult.data?.map(dm => dm.manager).filter(Boolean) || []
               }
               
+              console.log('[REALTIME] Adding deal to state:', dealWithExecutors)
               setDeals(prev => [...prev, dealWithExecutors])
               
               // Уведомление и звук для новой заявки
+              console.log('[REALTIME] Showing notification...')
               toast.success('🔔 Новая заявка!', {
                 description: `${newDeal.client_name} - ${newDeal.client_phone}`,
                 duration: 5000,
               })
               
               // Звуковой сигнал (только если включен)
+              console.log('[REALTIME] Sound enabled:', soundEnabled)
               if (soundEnabled) {
                 try {
+                  console.log('[REALTIME] Playing sound...')
                   // Используем Web Audio API для генерации звука
                   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
                   const oscillator = audioContext.createOscillator()
@@ -191,12 +202,14 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
                   
                   oscillator.start(audioContext.currentTime)
                   oscillator.stop(audioContext.currentTime + 0.5)
+                  console.log('[REALTIME] Sound played')
                 } catch (err) {
-                  console.log('Audio play failed:', err)
+                  console.error('[REALTIME] Audio play failed:', err)
                 }
               }
             }
           } else if (payload.eventType === 'UPDATE') {
+            console.log('[REALTIME] Deal UPDATE event')
             const { data: updatedDeal } = await supabase
               .from('deals')
               .select('*, executor:executors!deals_executor_id_fkey(*), manager:profiles!deals_manager_id_fkey(*)')
@@ -219,13 +232,17 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
               setDeals(prev => prev.map(d => d.id === dealWithExecutors.id ? dealWithExecutors : d))
             }
           } else if (payload.eventType === 'DELETE') {
+            console.log('[REALTIME] Deal DELETE event')
             setDeals(prev => prev.filter(d => d.id !== payload.old.id))
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[REALTIME] Subscription status:', status)
+      })
 
     return () => {
+      console.log('[REALTIME] Unsubscribing from channel')
       supabase.removeChannel(channel)
     }
   }, [supabase, soundEnabled])
