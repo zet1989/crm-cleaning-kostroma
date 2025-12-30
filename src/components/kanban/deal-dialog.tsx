@@ -942,28 +942,6 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
                 </Badge>
               )}
             </div>
-            {deal && deal.notes && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAIProcess}
-                disabled={processingAI}
-                className="ml-auto"
-              >
-                {processingAI ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Обработка...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    AI Заполнить
-                  </>
-                )}
-              </Button>
-            )}
           </DialogTitle>
           <DialogDescription className="sr-only">
             {deal ? 'Форма редактирования информации о сделке' : 'Форма создания новой сделки'}
@@ -972,30 +950,30 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
 
         <div className="flex-1 overflow-y-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-            <TabsList className="grid w-full grid-cols-5 gap-1">
-            <TabsTrigger value="main" className="text-xs sm:text-sm px-2">Основное</TabsTrigger>
+            <TabsList className="flex flex-wrap w-full gap-1 h-auto">
+            <TabsTrigger value="main" className="text-sm px-3 py-2 flex-1 min-w-[80px]">Основное</TabsTrigger>
             <TabsTrigger 
               value="history" 
               onClick={() => loadClientHistory(formData.client_phone)}
-              className="text-xs sm:text-sm px-2"
+              className="text-sm px-3 py-2 flex-1 min-w-[80px]"
             >
               Клиент
             </TabsTrigger>
             <TabsTrigger 
               value="calls"
               onClick={() => loadClientHistory(formData.client_phone)}
-              className="text-xs sm:text-sm px-2"
+              className="text-sm px-3 py-2 flex-1 min-w-[80px]"
             >
               Звонки
             </TabsTrigger>
-            <TabsTrigger value="salary" className="text-xs sm:text-sm px-2">
+            <TabsTrigger value="salary" className="text-sm px-3 py-2 flex-1 min-w-[80px]">
               Зарплата
             </TabsTrigger>
             <TabsTrigger 
               value="deal-history"
               onClick={() => deal && loadDealHistory(deal.id)}
               disabled={!deal}
-              className="text-xs sm:text-sm px-2"
+              className="text-sm px-3 py-2 flex-1 min-w-[80px]"
             >
               Изменения
             </TabsTrigger>
