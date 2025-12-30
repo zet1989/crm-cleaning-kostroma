@@ -1,0 +1,14 @@
+{
+  "name": "crm-email-listener",
+  "version": "1.0.0",
+  "description": "Email to CRM automatic integration",
+  "main": "email-listener.js",
+  "scripts": {
+    "start": "node email-listener.js"
+  },
+  "dependencies": {
+    "node-imap": "^0.9.6",
+    "mailparser": "^3.6.5",
+    "node-fetch": "^2.7.0"
+  }
+}

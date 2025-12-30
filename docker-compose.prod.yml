@@ -37,6 +37,25 @@ services:
         aliases:
           - next-app
 
+  # Email Listener Service
+  email-listener:
+    build:
+      context: .
+      dockerfile: Dockerfile.email
+    container_name: crm-email-listener
+    restart: always
+    environment:
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      EMAIL_HOST: ${EMAIL_HOST:-imap.beget.com}
+      CRM_WEBHOOK: http://next-app:3000/api/webhooks/email
+      WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
+    networks:
+      default:
+      supabase-network:
+    depends_on:
+      - next-app
+
   # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
