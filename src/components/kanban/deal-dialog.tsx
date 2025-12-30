@@ -1157,13 +1157,14 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
                 />
               </div>
 
-              <div className="flex justify-between pt-4">
+              <div className="flex flex-wrap justify-between gap-2 pt-4">
                 {deal && (
                   <Button 
                     type="button" 
                     variant="destructive" 
                     onClick={handleDelete}
                     disabled={deleting}
+                    className="flex-1 sm:flex-none min-w-[120px]"
                   >
                     {deleting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1174,11 +1175,11 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
                   </Button>
                 )}
                 
-                <div className="flex gap-2 ml-auto">
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <div className="flex gap-2 ml-auto flex-1 sm:flex-none justify-end">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none min-w-[100px]">
                     Отмена
                   </Button>
-                  <Button type="submit" disabled={loading}>
+                  <Button type="submit" disabled={loading} className="flex-1 sm:flex-none min-w-[100px]">
                     {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     {deal ? 'Сохранить' : 'Создать'}
                   </Button>
