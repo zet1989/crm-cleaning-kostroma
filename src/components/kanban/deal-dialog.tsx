@@ -972,27 +972,30 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
 
         <div className="flex-1 overflow-y-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-            <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="main">Основное</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-5 gap-1">
+            <TabsTrigger value="main" className="text-xs sm:text-sm px-2">Основное</TabsTrigger>
             <TabsTrigger 
               value="history" 
               onClick={() => loadClientHistory(formData.client_phone)}
+              className="text-xs sm:text-sm px-2"
             >
               Клиент
             </TabsTrigger>
             <TabsTrigger 
               value="calls"
               onClick={() => loadClientHistory(formData.client_phone)}
+              className="text-xs sm:text-sm px-2"
             >
               Звонки
             </TabsTrigger>
-            <TabsTrigger value="salary">
+            <TabsTrigger value="salary" className="text-xs sm:text-sm px-2">
               Зарплата
             </TabsTrigger>
             <TabsTrigger 
               value="deal-history"
               onClick={() => deal && loadDealHistory(deal.id)}
               disabled={!deal}
+              className="text-xs sm:text-sm px-2"
             >
               Изменения
             </TabsTrigger>

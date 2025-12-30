@@ -140,11 +140,11 @@ export async function POST(request: NextRequest) {
     const audioBuffer = await audioFile.arrayBuffer()
     const audioBase64 = Buffer.from(audioBuffer).toString('base64')
     
-    // Используем Gemini через OpenRouter ($1/M audio tokens - очень дёшево)
+    // Пробуем разные модели транскрибации
     const audioModels = [
-      'google/gemini-3-flash-preview',  // Новейшая, поддерживает аудио
-      'google/gemini-2.0-flash-001',
-      'google/gemini-flash-1.5'         // Стабильная версия
+      'deepgram/nova-2',                // Deepgram Nova 2 - STT специалист
+      'openai/whisper-large-v3',        // Whisper v3 через OpenRouter
+      'openai/whisper-1'                // Whisper v1
     ]
     
     for (const model of audioModels) {

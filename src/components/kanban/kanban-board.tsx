@@ -445,18 +445,6 @@ export function KanbanBoard({ initialColumns, initialDeals, executors }: KanbanB
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      {/* Кнопка включения/выключения звука */}
-      <div className="fixed bottom-4 right-4 z-50">
-        <Button
-          variant={soundEnabled ? "default" : "outline"}
-          size="icon"
-          onClick={toggleSound}
-          title={soundEnabled ? "Звук включен (нажмите чтобы выключить)" : "Звук выключен (нажмите чтобы включить)"}
-        >
-          {soundEnabled ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-        </Button>
-      </div>
-      
       <div className="flex-1 overflow-x-auto p-6">
         <div className="flex gap-4 h-full min-w-max">
           <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
