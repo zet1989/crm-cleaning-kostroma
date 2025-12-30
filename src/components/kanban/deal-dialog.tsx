@@ -1281,45 +1281,48 @@ export function DealDialog({ open, onOpenChange, deal, columnId, columns, execut
 
                       {/* Recording */}
                       {call.recording_url && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setPlayingCall(playingCall === call.id ? null : call.id)}
-                          >
-                            <Play className="h-3 w-3 mr-1" />
-                            {playingCall === call.id ? 'Остановить' : 'Прослушать'}
-                          </Button>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setPlayingCall(playingCall === call.id ? null : call.id)}
+                            >
+                              <Play className="h-3 w-3 mr-1" />
+                              {playingCall === call.id ? 'Остановить' : 'Прослушать'}
+                            </Button>
+                            
+                            {/* Transcribe button */}
+                            {!call.transcript && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => transcribeCall(call)}
+                                disabled={transcribingCallId === call.id}
+                              >
+                                {transcribingCallId === call.id ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                    Транскрибирование...
+                                  </>
+                                ) : (
+                                  <>
+                                    <FileText className="h-3 w-3 mr-1" />
+                                    Транскрибировать
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          
                           {playingCall === call.id && (
                             <audio 
                               src={call.recording_url} 
                               autoPlay 
                               controls 
-                              className="h-8 flex-1"
+                              className="h-8 w-full sm:flex-1"
                               onEnded={() => setPlayingCall(null)}
                             />
-                          )}
-                          
-                          {/* Transcribe button */}
-                          {!call.transcript && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => transcribeCall(call)}
-                              disabled={transcribingCallId === call.id}
-                            >
-                              {transcribingCallId === call.id ? (
-                                <>
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                  Транскрибирование...
-                                </>
-                              ) : (
-                                <>
-                                  <FileText className="h-3 w-3 mr-1" />
-                                  Транскрибировать
-                                </>
-                              )}
-                            </Button>
                           )}
                         </div>
                       )}
